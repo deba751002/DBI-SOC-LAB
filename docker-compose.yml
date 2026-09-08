@@ -32,6 +32,7 @@ volumes:
   ollama-data:
   vector-data:
   zeek-logs:
+  zeek-spool:
   suricata-logs:
   st-packs:
   st-configs:
@@ -142,8 +143,13 @@ services:
 # ================================================================
 # LAYER 2 — SECURITY ONION LAYER (Zeek + Suricata)
 # ================================================================
+  # zeekurity/zeek was abandoned upstream (last tag 5.2.2, from 2023 - no 6.0
+  # ever existed). Replaced with activecm/zeek, the actively maintained
+  # community image other NSM/SOC-lab projects use, which installs to
+  # /usr/local/zeek (not /opt/zeek like the old image) and auto-generates
+  # node.cfg from ZEEK_INTERFACE - no manual node.cfg/zeekctl.cfg needed.
   zeek:
-    image: zeekurity/zeek:6.0
+    image: activecm/zeek:8.0.6
     container_name: soc-zeek
     hostname: zeek
     <<: *restart
@@ -152,9 +158,9 @@ services:
     environment:
       - ZEEK_INTERFACE=${ZEEK_INTERFACE:-eth0}
     volumes:
-      - zeek-logs:/opt/zeek/logs
-      - ./config/zeek/local.zeek:/opt/zeek/share/zeek/site/local.zeek:ro
-      - ./config/zeek/zeekctl.cfg:/opt/zeek/etc/zeekctl.cfg:ro
+      - zeek-logs:/usr/local/zeek/logs
+      - zeek-spool:/usr/local/zeek/spool
+      - ./config/zeek/local.zeek:/usr/local/zeek/share/zeek/site/autoload/210-soc-lab.zeek:ro
     logging: *logging
 
   suricata:
@@ -216,7 +222,7 @@ services:
 # LAYER 4 — ELASTALERT2 DETECTION ENGINE
 # ================================================================
   elastalert2:
-    image: jertel/elastalert2:2.19.1
+    image: jertel/elastalert2:2.31.0
     container_name: soc-elastalert2
     hostname: elastalert2
     <<: *restart
@@ -993,8 +999,14 @@ services:
   # http://opensearch-node1:9200 init` once before first use, and disk fills
   # up fast with full packet capture enabled — start only when deep PCAP
   # forensics is actually needed, not by default.
+  # NOTE: dtagdevsec/arkime (the old T-Pot-style all-in-one image) was removed
+  # from Docker Hub. Arkime's own current official image is
+  # ghcr.io/arkime/arkime/arkime, but it splits capture/viewer roles via a
+  # `command:` argument rather than the old env-var-only setup below - verify
+  # the exact command/env needed against https://arkime.com/docker before
+  # actually enabling this profile; not yet validated end-to-end.
   arkime:
-    image: dtagdevsec/arkime:2411
+    image: ghcr.io/arkime/arkime/arkime:v6-latest
     container_name: soc-arkime
     hostname: arkime
     <<: *restart

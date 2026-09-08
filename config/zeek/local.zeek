@@ -25,9 +25,6 @@
 # MITRE ATT&CK enrichment scripts
 @load policy/integration/collective-intel
 
-# Custom SOC detection scripts
-@load ./soc-detections
-
 module SOC;
 
 # Log all connections to OpenSearch via Vector
