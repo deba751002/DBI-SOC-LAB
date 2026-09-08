@@ -4,10 +4,11 @@ http.port: 9200
 discovery.seed_hosts: ["opensearch-node1","opensearch-node2"]
 cluster.initial_master_nodes: ["opensearch-node1","opensearch-node2"]
 bootstrap.memory_lock: true
-plugins.security.ssl.http.enabled: false
-plugins.security.ssl.transport.enforce_hostname_verification: false
-plugins.security.allow_unsafe_democertificates: true
-plugins.security.allow_default_init_securityindex: true
-plugins.security.audit.type: internal_opensearch
-plugins.security.enable_snapshot_restore_privilege: true
-plugins.security.restapi.roles_enabled: ["all_access","security_rest_api_access"]
+# The security plugin's transport layer (node-to-node) requires a configured
+# keystore/pemcert path even with HTTP SSL off - none was ever provisioned in
+# this repo, so every node failed to boot ("keystore_filepath ... must be set
+# if transport ssl is requested"). Disabling the plugin outright is the
+# standard approach for a single-purpose lab cluster with no multi-tenant
+# access control needs; existing basic-auth credentials other services still
+# send (OPENSEARCH_INITIAL_ADMIN_PASSWORD) are simply ignored, not rejected.
+plugins.security.disabled: true
