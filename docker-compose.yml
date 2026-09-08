@@ -625,19 +625,30 @@ services:
 # ================================================================
 # LAYER 8 — VELOCIRAPTOR DFIR
 # ================================================================
+  # wlambert/velociraptor bakes its own entrypoint script that auto-generates
+  # server.config.yaml and starts "velociraptor --config ... frontend -v"
+  # itself (env-var driven, VELOX_* prefix) - our old `command:` override was
+  # replacing that entire script with a bare arg array missing the actual
+  # binary, and pointed at config/velociraptor/, a directory that was never
+  # actually created in this repo. Removed the override, added the env vars
+  # the built-in entrypoint expects instead.
   velociraptor:
     image: wlambert/velociraptor:latest
     container_name: soc-velociraptor
     hostname: velociraptor
     <<: *restart
-    command: ["--config", "/etc/velociraptor/server.config.yaml", "frontend", "-v"]
+    environment:
+      - VELOX_FRONTEND_HOSTNAME=${VELOCIRAPTOR_FRONTEND_HOSTNAME:-velociraptor}
+      - VELOX_SERVER_URL=${VELOCIRAPTOR_SERVER_URL:-https://velociraptor:8000/}
+      - VELOX_USER=${VELOCIRAPTOR_ADMIN_USER:-admin}
+      - VELOX_PASSWORD=${VELOCIRAPTOR_ADMIN_PASSWORD}
+      - VELOX_ROLE=administrator
     ports:
       - "${VELOCIRAPTOR_PORT:-8889}:8889"
       - "${VELOCIRAPTOR_API_PORT:-8001}:8001"
       - "8000:8000"
     volumes:
       - velociraptor-data:/velociraptor
-      - ./config/velociraptor:/etc/velociraptor
     networks:
       soc-net: { ipv4_address: 172.20.0.80 }
     logging: *logging
