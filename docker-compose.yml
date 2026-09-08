@@ -268,43 +268,121 @@ services:
 
 # ================================================================
 # LAYER 6 — DFIR-IRIS CASE MANAGEMENT
+# IRIS restructured its Docker deployment upstream (rabbitmq + db + app +
+# worker + nginx, replacing the old single "irisdockerproject" image, which
+# was removed from ghcr.io — hence the "denied" pull error on the old setup).
+# The nginx container keeps hostname "dfir-iris" so every internal caller in
+# this repo (ai-agents/tools/iris_tool.py, StackStorm's create_incident.py,
+# soar-playbooks/, config/nginx/nginx.conf) keeps working against
+# https://dfir-iris:443 unchanged.
+# Run config/dfir-iris/generate-certs.sh once before first start.
 # ================================================================
-  dfir-iris:
-    image: ghcr.io/dfir-iris/irisdockerproject:v2.4.9
-    container_name: soc-dfir-iris
-    hostname: dfir-iris
+  iris-rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: soc-iris-rabbitmq
+    hostname: iris-rabbitmq
     <<: *restart
-    depends_on: [iris-db]
-    ports:
-      - "${IRIS_PORT:-8443}:443"
-    environment:
-      - IRIS_SECRET_KEY=${IRIS_SECRET_KEY}
-      - IRIS_ADM_USERNAME=administrator
-      - IRIS_ADM_PASSWORD=${IRIS_ADMIN_PASSWORD}
-      - IRIS_ADM_EMAIL=${MISP_ADMIN_EMAIL}
-      - IRIS_SECURITY_REGISTRATION_ENABLE=false
-      - DB_USER=iris
-      - DB_PASS=${IRIS_DB_PASSWORD}
-      - DB_HOST=iris-db
-      - DB_PORT=5432
-      - DB_NAME=iris_db
-    volumes:
-      - dfir-iris-data:/home/iris/data
     networks:
-      soc-net: { ipv4_address: 172.20.0.60 }
+      soc-net: { ipv4_address: 172.20.0.62 }
     logging: *logging
 
   iris-db:
-    image: postgres:16-alpine
+    image: ghcr.io/dfir-iris/iriswebapp_db:v2.4.20
     container_name: soc-iris-db
+    hostname: iris-db
+    <<: *restart
     environment:
-      POSTGRES_USER: iris
-      POSTGRES_PASSWORD: ${IRIS_DB_PASSWORD}
-      POSTGRES_DB: iris_db
+      - POSTGRES_USER=iris
+      - POSTGRES_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_ADMIN_USER=iris_adm
+      - POSTGRES_ADMIN_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_DB=iris_db
     volumes:
       - dfir-iris-db:/var/lib/postgresql/data
     networks:
       soc-net: { ipv4_address: 172.20.0.61 }
+    logging: *logging
+
+  iris-app:
+    image: ghcr.io/dfir-iris/iriswebapp_app:v2.4.20
+    container_name: soc-iris-app
+    hostname: iris-app
+    <<: *restart
+    command: ["nohup", "./iris-entrypoint.sh", "iriswebapp"]
+    depends_on: [iris-rabbitmq, iris-db]
+    environment:
+      - POSTGRES_USER=iris
+      - POSTGRES_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_ADMIN_USER=iris_adm
+      - POSTGRES_ADMIN_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_SERVER=iris-db
+      - POSTGRES_PORT=5432
+      - IRIS_SECRET_KEY=${IRIS_SECRET_KEY}
+      - IRIS_SECURITY_PASSWORD_SALT=${IRIS_SECRET_KEY}
+      - IRIS_ADM_USERNAME=administrator
+      - IRIS_ADM_PASSWORD=${IRIS_ADMIN_PASSWORD}
+      - IRIS_ADM_EMAIL=${MISP_ADMIN_EMAIL}
+      - IRIS_SECURITY_REGISTRATION_ENABLE=false
+      - LOG_LEVEL=info
+    volumes:
+      - ./config/dfir-iris/certificates/rootCA/irisRootCACert.pem:/etc/irisRootCACert.pem:ro
+      - ./config/dfir-iris/certificates/:/home/iris/certificates/:ro
+      - ./config/dfir-iris/certificates/ldap/:/iriswebapp/certificates/ldap/:ro
+      - dfir-iris-data:/home/iris/downloads
+    networks:
+      soc-net: { ipv4_address: 172.20.0.60 }
+    logging: *logging
+
+  iris-worker:
+    image: ghcr.io/dfir-iris/iriswebapp_app:v2.4.20
+    container_name: soc-iris-worker
+    hostname: iris-worker
+    <<: *restart
+    command: ["./wait-for-iriswebapp.sh", "iris-app:8000", "./iris-entrypoint.sh", "iris-worker"]
+    depends_on: [iris-rabbitmq, iris-db, iris-app]
+    environment:
+      - POSTGRES_USER=iris
+      - POSTGRES_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_ADMIN_USER=iris_adm
+      - POSTGRES_ADMIN_PASSWORD=${IRIS_DB_PASSWORD}
+      - POSTGRES_SERVER=iris-db
+      - POSTGRES_PORT=5432
+      - IRIS_SECRET_KEY=${IRIS_SECRET_KEY}
+      - IRIS_SECURITY_PASSWORD_SALT=${IRIS_SECRET_KEY}
+      - IRIS_WORKER=true
+      - LOG_LEVEL=info
+    volumes:
+      - ./config/dfir-iris/certificates/rootCA/irisRootCACert.pem:/etc/irisRootCACert.pem:ro
+      - ./config/dfir-iris/certificates/:/home/iris/certificates/:ro
+      - ./config/dfir-iris/certificates/ldap/:/iriswebapp/certificates/ldap/:ro
+      - dfir-iris-data:/home/iris/downloads
+    networks:
+      soc-net: { ipv4_address: 172.20.0.63 }
+    logging: *logging
+
+  dfir-iris:
+    image: ghcr.io/dfir-iris/iriswebapp_nginx:v2.4.20
+    container_name: soc-dfir-iris
+    hostname: dfir-iris
+    <<: *restart
+    depends_on: [iris-app]
+    environment:
+      - IRIS_UPSTREAM_SERVER=iris-app
+      - IRIS_UPSTREAM_PORT=8000
+      - IRIS_FRONTEND_SERVER=iris-app
+      - IRIS_FRONTEND_PORT=8000
+      - INTERFACE_HTTPS_PORT=443
+      - SERVER_NAME=dfir-iris
+      - CERT_FILENAME=cert.crt
+      - KEY_FILENAME=cert.key
+      - IRIS_AUTHENTICATION_TYPE=local
+    ports:
+      - "${IRIS_PORT:-8443}:443"
+    volumes:
+      - ./config/dfir-iris/certificates/web_certificates/:/www/certs/:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.64 }
+    logging: *logging
 
 # ================================================================
 # LAYER 7 — MISP THREAT INTELLIGENCE

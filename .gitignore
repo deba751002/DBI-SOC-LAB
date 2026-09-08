@@ -57,3 +57,6 @@ responder-logs/NTLMv1*
 # Ansible — real endpoint hostnames/credentials never get committed
 ansible/inventory.local.ini
 ansible/*.retry
+
+# DFIR-IRIS — generated self-signed certs/keys, never committed
+config/dfir-iris/certificates/
