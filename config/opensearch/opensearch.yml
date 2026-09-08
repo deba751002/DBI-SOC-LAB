@@ -4,11 +4,10 @@ http.port: 9200
 discovery.seed_hosts: ["opensearch-node1","opensearch-node2"]
 cluster.initial_master_nodes: ["opensearch-node1","opensearch-node2"]
 bootstrap.memory_lock: true
-# The security plugin's transport layer (node-to-node) requires a configured
-# keystore/pemcert path even with HTTP SSL off - none was ever provisioned in
-# this repo, so every node failed to boot ("keystore_filepath ... must be set
-# if transport ssl is requested"). Disabling the plugin outright is the
-# standard approach for a single-purpose lab cluster with no multi-tenant
-# access control needs; existing basic-auth credentials other services still
-# send (OPENSEARCH_INITIAL_ADMIN_PASSWORD) are simply ignored, not rejected.
-plugins.security.disabled: true
+# Security plugin disabled via the DISABLE_SECURITY_PLUGIN env var on each
+# node in docker-compose.yml instead of here - plugins.security.disabled in
+# opensearch.yml stopped working as of OpenSearch 2.12 (a known upstream
+# regression, opensearch-project/security#4062); it also makes the bundled
+# install_demo_configuration.sh script wrongly think the file was already
+# hand-configured for security and skip its own setup, without actually
+# preventing the security plugin from loading and demanding transport certs.
