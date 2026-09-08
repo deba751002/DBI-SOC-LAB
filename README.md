@@ -2,10 +2,10 @@
 
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE-ATT%26CK-red)](https://attack.mitre.org/)
 
-> A hands-on, fully open-source Security Operations Center lab running 12 production-grade tools via Docker Compose. Built for SOC Level 2/3 analyst training, blue team skill development, and adversary emulation — all on a single machine.
+> A hands-on, fully open-source Security Operations Center lab running 28+ production-grade tools via Docker Compose. Built for SOC Level 2/3 analyst training, blue team skill development, and adversary emulation — all on a single machine.
 
 **Author:** Debasish Lenka  
-**Stack:** 12 tools · 100% free · MITRE ATT&CK v14 · Docker Compose  
+**Stack:** 28+ tools · 100% free · MITRE ATT&CK v14 · Docker Compose  
 **Minimum:** 16 GB RAM · 50 GB disk · Linux / WSL2 / macOS
 
 ---
@@ -625,6 +625,9 @@ MIT License — free to use, modify, and distribute for educational and research
 ## Author
 
 **Debasish Lenka**
+- GitHub: [@deba751002](https://github.com/deba751002)
+- LinkedIn: [linkedin.com/in/debasish-lenka-0a9815352](https://www.linkedin.com/in/debasish-lenka-0a9815352)
+- Email: captainfun160@gmail.com
 
 Built as a hands-on SOC training environment for blue team skill development, threat detection practice, and adversary emulation research.
 
@@ -632,17 +635,7 @@ Built as a hands-on SOC training environment for blue team skill development, th
 
 ---
 
-*Advanced SOC Lab v2.0 · 12 tools · 100% open-source · MITRE ATT&CK v14*
-
-
----
-
-## 👤 Author
-
-**Debasish Lenka**
-- GitHub: [@deba751002](https://github.com/deba751002)
-- LinkedIn: [linkedin.com/in/debasish-lenka-0a9815352](https://www.linkedin.com/in/debasish-lenka-0a9815352)
-- Email: captainfun160@gmail.com
+*DBI SOC · 28+ tools · 100% open-source · MITRE ATT&CK v14*
 
 ---
 ⭐ **Star this repo if it helped you — it helps other SOC analysts find it!**
