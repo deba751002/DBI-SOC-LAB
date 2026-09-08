@@ -1,0 +1,24 @@
+title: Valid Account Logon Outside Business Hours
+id: o6r0p4q7-8n5m-6o2r-p0q5-6s2r5n0q7o3r
+status: production
+description: Detects a successful interactive or network logon that falls outside
+  the organization's normal business hours (08:00-18:00, Mon-Fri) — a common
+  indicator of a compromised or misused valid account (T1078). Sigma cannot
+  express a time-of-day condition natively, so this rule flags the qualifying
+  successful-logon event type; the actual off-hours threshold is enforced by
+  the paired ElastAlert2 rule (config/elastalert2/rules/T1078_afterhours_login.yml).
+author: SOC Lab
+tags: [attack.defense_evasion, attack.persistence, attack.privilege_escalation, attack.initial_access, attack.t1078]
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4624
+    LogonType:
+      - 2
+      - 10
+  filter:
+    TargetUserName|endswith: '$'
+  condition: selection and not filter
+level: medium

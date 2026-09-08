@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenVAS VAPT — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+  <style>
+    .scan-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-5); }
+    .scan-select { width: 100%; margin-bottom: var(--space-3); }
+    .scan-output {
+      background: var(--bg-base); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: var(--space-4);
+      font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+      min-height: 160px; max-height: 280px; overflow-y: auto;
+      color: var(--text-secondary);
+    }
+    .thinking-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); animation: blink 1s infinite; margin: 0 2px;
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+    .cvss-bar { width: 60px; height: 6px; border-radius: 3px; background: var(--bg-input); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    .cvss-fill { height: 100%; }
+    .cvss-fill.critical { background: var(--critical); }
+    .cvss-fill.high { background: var(--high); }
+    .cvss-fill.medium { background: var(--medium); }
+    .cvss-fill.low { background: var(--low); }
+
+    .engine-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .engine-toggle button {
+      background: var(--bg-input); border: none; color: var(--text-secondary);
+      font-size: 11px; font-family: var(--font-mono); padding: 5px 14px; cursor: pointer;
+    }
+    .engine-toggle button.active { background: var(--accent); color: #fff; }
+    .engine-disabled { position: relative; opacity: 0.4; pointer-events: none; filter: grayscale(60%); }
+    .engine-banner {
+      background: var(--medium-dim); border: 1px solid rgba(234,179,8,0.3);
+      border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4);
+      font-size: 12px; color: var(--medium); display: flex; align-items: center;
+      justify-content: space-between; gap: var(--space-3);
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html" class="active"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🛡️</span> OpenVAS — Vulnerability Assessment</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> Greenbone feed synced · 6 hosts in scope</span>
+    <div class="topbar-right">
+      <a href="http://localhost:9392" target="_blank" class="btn btn-ghost btn-sm">Open GSA ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card info">
+        <div class="kpi-label">Hosts Scanned</div>
+        <div class="kpi-value">6</div>
+        <div class="kpi-sub">last scan 2h ago</div>
+      </div>
+      <div class="kpi-card critical">
+        <div class="kpi-label">Critical Findings</div>
+        <div class="kpi-value">3</div>
+        <div class="kpi-sub">CVSS ≥ 9.0</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">High Findings</div>
+        <div class="kpi-value">11</div>
+        <div class="kpi-sub">CVSS 7.0–8.9</div>
+      </div>
+      <div class="kpi-card medium">
+        <div class="kpi-label">Total Findings</div>
+        <div class="kpi-value">34</div>
+        <div class="kpi-sub">across all severities</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">⚙️ Vulnerability Detection Engine</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <p style="font-size:12px;color:var(--text-secondary)">
+          Wazuh ships its own CVE-based vulnerability detector, which overlaps with OpenVAS.
+          Running both wastes resources and can produce duplicate findings — pick one active engine below.
+          This choice is shared with the <a href="13_wazuh_edr.html" style="color:var(--accent)">Wazuh EDR</a> page.
+        </p>
+        <div class="engine-toggle" id="engine-toggle">
+          <button data-engine="openvas" id="btn-openvas">OpenVAS</button>
+          <button data-engine="wazuh" id="btn-wazuh">Wazuh</button>
+        </div>
+        <div id="openvas-banner" class="engine-banner" style="display:none">
+          <span>⚠️ OpenVAS scanning is inactive — Wazuh is the active vulnerability engine.</span>
+          <button class="btn btn-primary btn-sm" onclick="setEngine('openvas')">Use OpenVAS instead</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="openvas-content">
+    <div class="grid-2 mb-4">
+      <!-- Scan launcher -->
+      <div class="scan-box">
+        <div class="section-header mb-4">
+          <div class="section-title">Launch Scan</div>
+        </div>
+        <select class="input scan-select" id="scan-target">
+          <option value="all">All hosts — Full VAPT scan</option>
+          <option value="finance">WKSTN-FINANCE-01 — Fast scan</option>
+          <option value="dc">WIN-DC01 — Full & Fast Ultimate</option>
+          <option value="fileserver">SRV-FILESERVER-01 — Web app scan</option>
+        </select>
+        <button class="btn btn-primary w-full" id="run-scan-btn" onclick="runScan()">▶ Run Scan</button>
+        <div class="scan-output mt-4" id="scan-output">
+          <span style="color:var(--text-muted)">Select a target and click Run…</span>
+        </div>
+      </div>
+
+      <!-- Scan history -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🕓 Scan History</span>
+          <span class="badge badge-accent">6 today</span>
+        </div>
+        <div class="card-body" style="padding-top:var(--space-3)">
+          <div class="job-row"><span class="badge badge-low">DONE</span><span style="flex:1;font-size:11px">Full VAPT — All hosts · 34 findings</span><span class="text-muted text-xs mono">2h ago</span></div>
+          <div class="job-row"><span class="badge badge-low">DONE</span><span style="flex:1;font-size:11px">Fast scan — WKSTN-FINANCE-01 · 6 findings</span><span class="text-muted text-xs mono">5h ago</span></div>
+          <div class="job-row"><span class="badge badge-low">DONE</span><span style="flex:1;font-size:11px">Full & Fast — WIN-DC01 · 9 findings</span><span class="text-muted text-xs mono">1d ago</span></div>
+          <div class="job-row"><span class="badge badge-low">DONE</span><span style="flex:1;font-size:11px">Web app scan — SRV-FILESERVER-01 · 4 findings</span><span class="text-muted text-xs mono">2d ago</span></div>
+          <div class="job-row"><span class="badge badge-low">DONE</span><span style="flex:1;font-size:11px">Full VAPT — All hosts · 41 findings</span><span class="text-muted text-xs mono">7d ago</span></div>
+          <div class="job-row"><span class="badge badge-medium">STALE</span><span style="flex:1;font-size:11px">Feed sync — CVE/SCAP data</span><span class="text-muted text-xs mono">7d ago</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Findings table -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">🔎 Open Vulnerability Findings</span>
+        <span class="badge badge-critical">3 critical</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr><th>Severity</th><th>CVSS</th><th>Host</th><th>CVE / QoD</th><th>Summary</th><th>MITRE</th></tr>
+          </thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td><span class="badge badge-critical">CRITICAL</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill critical" style="width:96%"></span></span>9.8</td>
+              <td>WIN-DC01</td>
+              <td class="mono">CVE-2023-4966<br><span class="text-xs text-muted">QoD 99%</span></td>
+              <td>Citrix NetScaler ADC/Gateway sensitive info disclosure ("Citrix Bleed") — session token leak allows auth bypass</td>
+              <td><span class="badge badge-neutral">T1190</span></td>
+            </tr>
+            <tr class="row-suspicious">
+              <td><span class="badge badge-critical">CRITICAL</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill critical" style="width:94%"></span></span>9.4</td>
+              <td>SRV-FILESERVER-01</td>
+              <td class="mono">CVE-2021-44228<br><span class="text-xs text-muted">QoD 97%</span></td>
+              <td>Apache Log4j2 JNDI remote code execution ("Log4Shell") in bundled reporting service</td>
+              <td><span class="badge badge-neutral">T1190</span></td>
+            </tr>
+            <tr class="row-suspicious">
+              <td><span class="badge badge-critical">CRITICAL</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill critical" style="width:92%"></span></span>9.1</td>
+              <td>WKSTN-FINANCE-01</td>
+              <td class="mono">CVE-2020-1472<br><span class="text-xs text-muted">QoD 95%</span></td>
+              <td>Netlogon elevation of privilege ("Zerologon") — unauthenticated domain admin takeover</td>
+              <td><span class="badge badge-neutral">T1078</span></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-high">HIGH</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill high" style="width:82%"></span></span>8.1</td>
+              <td>WIN-DC01</td>
+              <td class="mono">CVE-2017-0144<br><span class="text-xs text-muted">QoD 95%</span></td>
+              <td>SMBv1 remote code execution ("EternalBlue") — SMBv1 still enabled on domain controller</td>
+              <td><span class="badge badge-neutral">T1210</span></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-high">HIGH</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill high" style="width:75%"></span></span>7.5</td>
+              <td>WKSTN-LEGAL-05</td>
+              <td class="mono">CVE-2022-30190<br><span class="text-xs text-muted">QoD 80%</span></td>
+              <td>Microsoft Support Diagnostic Tool RCE ("Follina") via malicious Office document</td>
+              <td><span class="badge badge-neutral">T1203</span></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-high">HIGH</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill high" style="width:73%"></span></span>7.3</td>
+              <td>SRV-HR-02</td>
+              <td class="mono">CVE-2023-38831<br><span class="text-xs text-muted">QoD 70%</span></td>
+              <td>WinRAR crafted archive code execution — outdated WinRAR build detected</td>
+              <td><span class="badge badge-neutral">T1204</span></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-medium">MEDIUM</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill medium" style="width:58%"></span></span>5.8</td>
+              <td>my-laptop</td>
+              <td class="mono">CVE-2024-21351<br><span class="text-xs text-muted">QoD 70%</span></td>
+              <td>Windows SmartScreen security feature bypass — missing security update</td>
+              <td><span class="badge badge-neutral">T1553</span></td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-medium">MEDIUM</span></td>
+              <td><span class="cvss-bar"><span class="cvss-fill medium" style="width:53%"></span></span>5.3</td>
+              <td>WKSTN-FINANCE-01</td>
+              <td class="mono">CVE-2023-36884<br><span class="text-xs text-muted">QoD 60%</span></td>
+              <td>Office/Windows HTML RCE — Office build below latest security patch level</td>
+              <td><span class="badge badge-neutral">T1566</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">📌 Remediation Priorities</span></div>
+      <div class="card-body" style="padding-top:var(--space-3);font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;gap:8px">
+        <div>1. <strong>WIN-DC01</strong> — Patch Citrix Bleed + Zerologon immediately; disable SMBv1 domain-wide (both allow unauthenticated domain compromise).</div>
+        <div>2. <strong>SRV-FILESERVER-01</strong> — Update or remove the Log4j2-bundled reporting service; apply JNDI lookup mitigation if patching is delayed.</div>
+        <div>3. <strong>Workstations</strong> — Roll out pending Office/Windows security updates (Follina, WinRAR, SmartScreen bypass) via patch management.</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">⚡ Nuclei — Continuous Lightweight Scanning</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+        <p style="font-size:12px;color:var(--text-secondary);margin:0">
+          OpenVAS above does deep, slow, comprehensive scans (weekly/monthly cadence). Nuclei runs fast,
+          template-based checks (thousands of community CVE/misconfiguration templates) daily as a lighter
+          complement — not a replacement.
+        </p>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Last run: never</span><span class="text-muted text-xs mono">./security-scan.sh --nuclei</span></div>
+      </div>
+    </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const SCAN_OUTPUTS = {
+  all: `[OpenVAS] Starting Full VAPT scan against 6 hosts...
+  → Loading NVT feed (94,213 tests) · SCAP feed synced 2h ago
+
+[Discovery] Host discovery complete: 6/6 hosts alive
+  → WIN-DC01, SRV-FILESERVER-01, SRV-HR-02, WKSTN-FINANCE-01, WKSTN-LEGAL-05, my-laptop
+
+[Scan] Running NVT family: Citrix, Windows, SMB, Web Servers, RPC...
+  → WIN-DC01: CVE-2023-4966 (Citrix Bleed) — CRITICAL 9.8
+  → WIN-DC01: CVE-2020-1472 (Zerologon) — CRITICAL 9.1
+  → SRV-FILESERVER-01: CVE-2021-44228 (Log4Shell) — CRITICAL 9.4
+  → 31 additional findings across High/Medium/Low
+
+[CONCLUSION] Scan complete — 34 open findings, 3 critical.
+  → Recommended: prioritize WIN-DC01 remediation (domain-wide impact)`,
+
+  finance: `[OpenVAS] Fast scan — WKSTN-FINANCE-01
+  → Loading top-1000 port NVTs...
+
+[Scan] Findings:
+  → CVE-2020-1472 (Zerologon) — CRITICAL 9.1
+  → CVE-2023-36884 (Office/HTML RCE) — MEDIUM 5.3
+  → 4 additional Low/Info findings
+
+[CONCLUSION] 6 findings — 1 critical requiring immediate patching.`,
+
+  dc: `[OpenVAS] Full & Fast Ultimate — WIN-DC01
+  → Domain controller — running full NVT family incl. SMB/RPC/Kerberos checks
+
+[Scan] Findings:
+  → CVE-2023-4966 (Citrix Bleed) — CRITICAL 9.8
+  → CVE-2020-1472 (Zerologon) — CRITICAL 9.1
+  → CVE-2017-0144 (EternalBlue / SMBv1) — HIGH 8.1
+  → 6 additional Medium/Low findings
+
+[CONCLUSION] 9 findings — domain controller is HIGH RISK, patch immediately.`,
+
+  fileserver: `[OpenVAS] Web application scan — SRV-FILESERVER-01
+  → Running HTTP/HTTPS NVTs, JNDI/log injection probes...
+
+[Scan] Findings:
+  → CVE-2021-44228 (Log4Shell / JNDI RCE) — CRITICAL 9.4
+  → 3 additional Medium/Low web-app findings
+
+[CONCLUSION] 4 findings — 1 critical (unauthenticated RCE via crafted request).`
+};
+
+function runScan() {
+  const target = document.getElementById('scan-target').value;
+  const out = document.getElementById('scan-output');
+  const btn = document.getElementById('run-scan-btn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  out.innerHTML = '<span style="color:var(--accent)">Connecting to ospd-openvas</span> <span class="thinking-dot"></span><span class="thinking-dot" style="animation-delay:.3s"></span><span class="thinking-dot" style="animation-delay:.6s"></span>';
+  setTimeout(() => {
+    const lines = SCAN_OUTPUTS[target].split('\n');
+    out.innerHTML = '';
+    lines.forEach((l, i) => {
+      setTimeout(() => {
+        out.innerHTML += `<span style="color:${l.startsWith('[') ? 'var(--accent)' : 'var(--text-secondary)'}">${l}\n</span>`;
+        out.scrollTop = out.scrollHeight;
+      }, i * 80);
+    });
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = '▶ Run Scan';
+    }, lines.length * 80 + 500);
+  }, 1200);
+}
+
+const ENGINE_KEY = 'soc_vapt_engine';
+function getEngine() { return localStorage.getItem(ENGINE_KEY) || 'openvas'; }
+function setEngine(e) { localStorage.setItem(ENGINE_KEY, e); renderEngineState(); }
+
+function renderEngineState() {
+  const engine = getEngine();
+  document.getElementById('btn-openvas').classList.toggle('active', engine === 'openvas');
+  document.getElementById('btn-wazuh').classList.toggle('active', engine === 'wazuh');
+
+  const banner = document.getElementById('openvas-banner');
+  const content = document.getElementById('openvas-content');
+  if (engine === 'openvas') {
+    banner.style.display = 'none';
+    content.classList.remove('engine-disabled');
+  } else {
+    banner.style.display = 'flex';
+    content.classList.add('engine-disabled');
+  }
+}
+
+document.getElementById('btn-openvas').addEventListener('click', () => setEngine('openvas'));
+document.getElementById('btn-wazuh').addEventListener('click', () => setEngine('wazuh'));
+
+renderEngineState();
+</script>
+</body>
+</html>

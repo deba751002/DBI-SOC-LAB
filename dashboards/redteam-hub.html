@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Team Module — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+  <style>
+    .rt-card {
+      display: flex; flex-direction: column; gap: var(--space-2);
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: var(--space-5); text-decoration: none; transition: border-color .15s, transform .15s;
+    }
+    .rt-card:hover { border-color: var(--critical); transform: translateY(-2px); }
+    .rt-card-icon { font-size: 28px; }
+    .rt-card-name { color: var(--text-primary); font-weight: 700; font-size: 15px; }
+    .rt-card-desc { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+    .rt-card-tags { margin-top: var(--space-2); }
+    .rt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html" class="active"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🔴</span> Red Team Module</div>
+    <span class="topbar-meta"><span class="status-dot red"></span> Offensive tools — isolated lab network only</span>
+    <div class="topbar-right">
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="card mb-4" style="background:rgba(239,68,68,0.08);border:1px solid var(--critical)">
+      <div class="card-body" style="display:flex;gap:12px;align-items:flex-start">
+        <span style="font-size:20px;flex-shrink:0">⚠️</span>
+        <div>
+          <div style="color:var(--critical);font-weight:700;margin-bottom:4px">Offensive Tooling — Authorized Use Only</div>
+          <div style="color:var(--text-secondary);font-size:13px">
+            Everything in this module is a red-team / adversary-emulation capability (attack simulation, credential
+            capture, AI-driven pentesting). It's kept separate from the blue-team dashboards above for a reason:
+            these tools generate traffic and artifacts that should never touch a production network, and separating
+            them makes it obvious in an audit which tools are defensive vs. offensive. Run only against the isolated
+            lab VLAN with explicit authorization.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3 mb-4">
+      <div class="kpi-card critical"><div class="kpi-label">Active Tools</div><div class="kpi-value">4</div><div class="kpi-sub">Caldera, Responder, Strix, GoPhish</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Last Operation</div><div class="kpi-value" style="font-size:18px;margin-top:4px">APT-29</div><div class="kpi-sub">85% detected by blue team</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Network Scope</div><div class="kpi-value" style="font-size:16px;margin-top:4px">redteam VLAN</div><div class="kpi-sub">docker compose --profile redteam</div></div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:var(--space-3)">Offensive Tools</div>
+    <div class="rt-grid">
+
+      <a href="07_caldera_attack.html" class="rt-card">
+        <div class="rt-card-icon">⚔️</div>
+        <div class="rt-card-name">MITRE Caldera</div>
+        <div class="rt-card-desc">Automated adversary emulation — run APT-29, insider-threat, and ransomware pre-stage operations and score blue-team detection coverage against the ATT&amp;CK matrix.</div>
+        <div class="rt-card-tags"><span class="badge badge-medium">85% detected</span></div>
+      </a>
+
+      <a href="10_responder_redteam.html" class="rt-card">
+        <div class="rt-card-icon">🎭</div>
+        <div class="rt-card-name">Responder</div>
+        <div class="rt-card-desc">LLMNR/NBT-NS poisoning and NTLMv2 hash capture — validates whether the blue team detects credential-theft attempts and forces the LLMNR/SMB-signing hardening playbook.</div>
+        <div class="rt-card-tags"><span class="badge badge-critical">Lab only</span></div>
+      </a>
+
+      <a href="18_strix_pentest.html" class="rt-card">
+        <div class="rt-card-icon">🕵️</div>
+        <div class="rt-card-name">Strix AI Pentest</div>
+        <div class="rt-card-desc">Autonomous AI agent that dynamically exploits web/API targets in a sandboxed container — reconnaissance, exploitation, and a written vulnerability report, end to end.</div>
+        <div class="rt-card-tags"><span class="badge badge-info">Sandboxed</span></div>
+      </a>
+
+      <a href="http://localhost:3333" target="_blank" class="rt-card">
+        <div class="rt-card-icon">🎣</div>
+        <div class="rt-card-name">GoPhish</div>
+        <div class="rt-card-desc">Phishing simulation — sends a tracked campaign to employees and measures who opens/clicks/submits credentials. Tests the human layer that Caldera/Responder/Strix don't touch.</div>
+        <div class="rt-card-tags"><span class="badge badge-critical">Lab only</span><span class="badge badge-neutral">:3333</span></div>
+      </a>
+
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,252 @@
+# ================================================================
+#  Vector 0.38 — SOC Log Pipeline
+#  Sources: Windows + Linux + Cloud + Zeek + Suricata + Syslog
+#  Transforms: Parse, Enrich, MITRE-tag
+#  Sink: OpenSearch SIEM cluster
+# ================================================================
+data_dir = "/var/lib/vector"
+
+# ─── SOURCES ────────────────────────────────────────────────────
+
+[sources.windows_sysmon]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6000"
+
+[sources.linux_auditd]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6001"
+
+[sources.cloud_logs]
+  type    = "http_server"
+  address = "0.0.0.0:6002"
+  decoding.codec = "json"
+
+[sources.zeek_logs]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6003"
+
+[sources.suricata_eve]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6004"
+
+[sources.file_integrity]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6005"
+
+[sources.beats_input]
+  type    = "logstash"
+  address = "0.0.0.0:5044"
+
+[sources.syslog_udp]
+  type    = "syslog"
+  mode    = "udp"
+  address = "0.0.0.0:514"
+
+[sources.wazuh_alerts]
+  type    = "file"
+  include = ["/wazuh-alerts/alerts.json"]
+  read_from = "end"
+
+# Fed by wazuh-remote-connector/poller.py, which pulls alerts from an
+# externally-hosted Wazuh (e.g. AWS EC2) indexer and pushes them here.
+[sources.wazuh_remote]
+  type    = "http_server"
+  address = "0.0.0.0:6006"
+  decoding.codec = "json"
+
+# Fed by endpoint-configs/windows/osquery/Forward-Osquery.ps1, which tails
+# osqueryd's local results log and forwards each new line here.
+[sources.osquery]
+  type    = "socket"
+  mode    = "tcp"
+  address = "0.0.0.0:6007"
+
+# ─── TRANSFORMS ─────────────────────────────────────────────────
+
+[transforms.parse_windows]
+  type   = "remap"
+  inputs = ["windows_sysmon"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source       = "windows"
+    .log_type         = "sysmon"
+    .@timestamp       = now()
+    .pipeline.version = "soc-lab-v2"
+    .host.name        = .Computer
+    .mitre.technique  = if exists(.EventID) {
+      eid = to_int!(.EventID)
+      if eid == 1  { "T1059 — Command and Script Interpreter" }
+      else if eid == 3  { "T1071 — Application Layer Protocol" }
+      else if eid == 7  { "T1055 — Process Injection (ImageLoad)" }
+      else if eid == 8  { "T1055 — CreateRemoteThread" }
+      else if eid == 10 { "T1003 — OS Credential Dumping" }
+      else if eid == 11 { "T1074 — Data Staged" }
+      else if eid == 13 { "T1112 — Modify Registry" }
+      else if eid == 22 { "T1071.004 — DNS" }
+      else { "Unknown" }
+    } else { "N/A" }
+  '''
+
+[transforms.parse_linux]
+  type   = "remap"
+  inputs = ["linux_auditd"]
+  source = '''
+    . = parse_syslog!(.message) ?? .
+    .log_source = "linux"
+    .log_type   = "auditd"
+    .@timestamp = now()
+  '''
+
+[transforms.parse_zeek]
+  type   = "remap"
+  inputs = ["zeek_logs"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source    = "network"
+    .log_type      = "zeek"
+    .sensor_type   = "security-onion-layer"
+    .@timestamp    = now()
+  '''
+
+[transforms.parse_suricata]
+  type   = "remap"
+  inputs = ["suricata_eve"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source  = "network"
+    .log_type    = "suricata"
+    .sensor_type = "security-onion-layer"
+    .@timestamp  = now()
+    # Promote Suricata alert fields
+    if exists(.alert) {
+      .rule.name     = .alert.signature
+      .rule.id       = .alert.signature_id
+      .rule.severity = .alert.severity
+      .rule.category = .alert.category
+    }
+  '''
+
+[transforms.parse_fim]
+  type   = "remap"
+  inputs = ["file_integrity"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source      = "endpoint"
+    .log_type        = "file_integrity"
+    .@timestamp      = now()
+    .mitre.technique = if .action == "deleted" {
+      "T1070.004 — Indicator Removal: File Deletion"
+    } else if .action == "renamed" || .action == "moved" {
+      "T1036 — Masquerading"
+    } else {
+      "T1005 — Data from Local System"
+    }
+  '''
+
+[transforms.parse_wazuh]
+  type   = "remap"
+  inputs = ["wazuh_alerts"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source  = "endpoint"
+    .log_type    = "wazuh"
+    .@timestamp  = now()
+    .severity    = if exists(.rule.level) {
+      lvl = to_int(.rule.level) ?? 0
+      if lvl >= 12 { "critical" } else if lvl >= 9 { "high" } else if lvl >= 6 { "medium" } else { "low" }
+    } else { "low" }
+    .host.name       = .agent.name
+    .rule_name       = .rule.description
+    .mitre.technique = if exists(.rule.mitre.id) {
+      join(.rule.mitre.id, ", ") ?? "N/A"
+    } else { "N/A" }
+  '''
+
+# Same alert shape as parse_wazuh above, but the http_server source with
+# decoding.codec = "json" already parses the body — fields are at the root,
+# not wrapped in .message.
+[transforms.parse_wazuh_remote]
+  type   = "remap"
+  inputs = ["wazuh_remote"]
+  source = '''
+    .log_source  = "endpoint"
+    .log_type    = "wazuh-remote"
+    .@timestamp  = now()
+    .severity    = if exists(.rule.level) {
+      lvl = to_int(.rule.level) ?? 0
+      if lvl >= 12 { "critical" } else if lvl >= 9 { "high" } else if lvl >= 6 { "medium" } else { "low" }
+    } else { "low" }
+    .host.name       = .agent.name
+    .rule_name       = .rule.description
+    .mitre.technique = if exists(.rule.mitre.id) {
+      join(.rule.mitre.id, ", ") ?? "N/A"
+    } else { "N/A" }
+  '''
+
+[transforms.parse_osquery]
+  type   = "remap"
+  inputs = ["osquery"]
+  source = '''
+    . = parse_json!(.message)
+    .log_source  = "endpoint"
+    .log_type    = "osquery"
+    .@timestamp  = now()
+    .host.name   = .hostIdentifier
+    .query_name  = .name
+    .mitre.technique = if .name == "scheduled_tasks" {
+      "T1053.005 — Scheduled Task"
+    } else if .name == "startup_items" {
+      "T1547.001 — Registry Run Keys / Startup Folder"
+    } else if .name == "usb_devices" {
+      "T1052.001 — Exfiltration over USB"
+    } else if .name == "listening_ports" {
+      "T1071 — Application Layer Protocol"
+    } else {
+      "N/A"
+    }
+  '''
+
+[transforms.parse_cloud]
+  type   = "remap"
+  inputs = ["cloud_logs"]
+  source = '''
+    .log_source = del(.cloud_provider) ?? "cloud"
+    .log_type   = "cloudlog"
+    .@timestamp = now()
+  '''
+
+[transforms.merge_all]
+  type   = "remap"
+  inputs = ["parse_windows","parse_linux","parse_zeek","parse_suricata","parse_fim","parse_wazuh","parse_wazuh_remote","parse_osquery","parse_cloud","beats_input","syslog_udp"]
+  source = '''
+    .pipeline.ingested_at = now()
+    .pipeline.name        = "soc-lab-v2"
+  '''
+
+# ─── SINKS ──────────────────────────────────────────────────────
+
+[sinks.opensearch_main]
+  type     = "elasticsearch"
+  inputs   = ["merge_all"]
+  endpoint = "http://opensearch-node1:9200"
+  mode     = "bulk"
+  index    = "soc-logs-%Y.%m.%d"
+  auth.strategy = "basic"
+  auth.user     = "admin"
+  auth.password = "${OPENSEARCH_INITIAL_ADMIN_PASSWORD}"
+  tls.verify_certificate = false
+  bulk.action = "index"
+  compression = "none"
+
+  [sinks.opensearch_main.encoding]
+    codec = "json"
+
+[sinks.vector_prom]
+  type    = "prometheus_exporter"
+  inputs  = ["internal_metrics"]
+  address = "0.0.0.0:9598"

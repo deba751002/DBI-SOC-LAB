@@ -1,0 +1,34 @@
+# Harbor installer config — NOT consumed by this repo's docker-compose.yml.
+# Harbor ships its own official offline installer that GENERATES its own
+# docker-compose.yml from this file (via install.sh) — hand-writing that
+# generated compose file here would drift from whatever version you install
+# and is exactly the kind of misconfiguration Docker Bench Security exists to
+# catch. Follow config/harbor/README.md instead: download the installer,
+# copy this file to harbor.yml, edit the values below, run install.sh.
+
+hostname: harbor.soc.lab
+
+http:
+  port: 8030
+
+# Harbor bundles Trivy natively — every image pushed here gets scanned
+# automatically, no separate Trivy step needed for images stored in Harbor.
+trivy:
+  ignore_unfixed: false
+  skip_update: false
+
+harbor_admin_password: ChangeMeHarbor@2026!
+
+database:
+  password: ChangeMeHarborDb@2026!
+  max_idle_conns: 100
+  max_open_conns: 900
+
+data_volume: /data/harbor
+
+log:
+  level: info
+  local:
+    rotate_count: 50
+    rotate_size: 200M
+    location: /var/log/harbor

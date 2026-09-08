@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pfSense Firewall — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html" class="active"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🔥</span> pfSense — Perimeter Firewall</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> WAN up · 3 interfaces</span>
+    <div class="topbar-right">
+      <a href="https://localhost:8443" target="_blank" class="btn btn-ghost btn-sm">Open pfSense ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card critical">
+        <div class="kpi-label">Blocked (24h)</div>
+        <div class="kpi-value">4,821</div>
+        <div class="kpi-sub">↑ 9% vs yesterday</div>
+      </div>
+      <div class="kpi-card low">
+        <div class="kpi-label">Passed (24h)</div>
+        <div class="kpi-value">62.4K</div>
+        <div class="kpi-sub">legitimate traffic</div>
+      </div>
+      <div class="kpi-card info">
+        <div class="kpi-label">Active Rules</div>
+        <div class="kpi-value">47</div>
+        <div class="kpi-sub">3 interfaces (WAN/LAN/DMZ)</div>
+      </div>
+      <div class="kpi-card medium">
+        <div class="kpi-label">WAN Throughput</div>
+        <div class="kpi-value">38 Mbps</div>
+        <div class="kpi-sub">↓12 / ↑26 Mbps</div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🌐 Interfaces</span></div>
+        <div class="card-body" style="padding-top:var(--space-3)">
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WAN — em0</span><span class="text-muted text-xs mono">203.0.113.10</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">LAN — em1</span><span class="text-muted text-xs mono">172.20.0.1/16</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">DMZ — em2</span><span class="text-muted text-xs mono">10.10.10.1/24</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">Suricata inline IDS</span><span class="text-muted text-xs mono">bridged on WAN</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">📊 Blocked by Rule Category</span></div>
+        <div class="card-body" style="padding-top:var(--space-3)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">GeoIP block (high-risk countries) <span style="float:right">2,140</span></div>
+          <div class="progress-bar"><div class="progress-fill critical" style="width:75%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">Default deny (no matching rule) <span style="float:right">1,802</span></div>
+          <div class="progress-bar"><div class="progress-fill high" style="width:62%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">Suricata IPS drop <span style="float:right">614</span></div>
+          <div class="progress-bar"><div class="progress-fill medium" style="width:30%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">Known-bad IOC block (MISP feed) <span style="float:right">265</span></div>
+          <div class="progress-bar"><div class="progress-fill low" style="width:15%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">📜 Live Firewall Log</span>
+        <span class="badge badge-accent">LIVE</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Action</th><th>Interface</th><th>Source</th><th>Destination</th><th>Rule</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td class="mono">13:55:02</td><td><span class="badge badge-critical">BLOCK</span></td><td>WAN</td>
+              <td class="mono">185.220.101.45:51422</td><td class="mono">203.0.113.10:22</td><td>GeoIP-Block-RU</td>
+            </tr>
+            <tr class="row-suspicious">
+              <td class="mono">13:54:47</td><td><span class="badge badge-critical">BLOCK</span></td><td>WAN</td>
+              <td class="mono">45.142.212.61:60112</td><td class="mono">203.0.113.10:23</td><td>Default-Deny</td>
+            </tr>
+            <tr>
+              <td class="mono">13:52:10</td><td><span class="badge badge-low">PASS</span></td><td>LAN</td>
+              <td class="mono">172.20.0.30:443</td><td class="mono">8.8.8.8:443</td><td>LAN-to-WAN-HTTPS</td>
+            </tr>
+            <tr class="row-suspicious">
+              <td class="mono">13:50:33</td><td><span class="badge badge-high">DROP</span></td><td>WAN</td>
+              <td class="mono">89.248.165.74:443</td><td class="mono">172.20.0.90:8888</td><td>Suricata-IPS-ET-MALWARE</td>
+            </tr>
+            <tr>
+              <td class="mono">13:48:19</td><td><span class="badge badge-low">PASS</span></td><td>DMZ</td>
+              <td class="mono">10.10.10.5:80</td><td class="mono">172.20.0.70:80</td><td>DMZ-to-MISP</td>
+            </tr>
+            <tr class="row-suspicious">
+              <td class="mono">13:45:02</td><td><span class="badge badge-critical">BLOCK</span></td><td>WAN</td>
+              <td class="mono">193.32.162.9:445</td><td class="mono">203.0.113.10:445</td><td>Default-Deny</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

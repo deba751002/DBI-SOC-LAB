@@ -1,0 +1,24 @@
+title: Bulk File Collection from Network Share
+id: n5q9o3p6-7m4l-5n1q-o9p4-5r1q4m9p6n2q
+status: production
+description: Detects an unusually large number of file-object-access events against
+  a network share by a single account in a short window — consistent with an
+  insider or compromised account staging data for exfiltration. The volume/time
+  threshold itself is enforced by the paired ElastAlert2 frequency rule
+  (config/elastalert2/rules/T1039_bulk_file_collection.yml); this Sigma rule
+  identifies the qualifying raw event type.
+author: SOC Lab
+tags: [attack.collection, attack.t1039]
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4663
+    ObjectType: 'File'
+    AccessMask: '0x1'
+  filter:
+    ShareName|contains:
+      - '\IPC$'
+  condition: selection and not filter
+level: medium

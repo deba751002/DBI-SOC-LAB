@@ -1,0 +1,51 @@
+<Sysmon schemaversion="4.90">
+  <!--
+    SOC Lab baseline Sysmon config — a trimmed subset of the well-known
+    community baselines (SwiftOnSecurity-style), covering the event types
+    this lab's detection rules actually key off:
+      1  Process creation           (T1059, T1003 parent/child chains)
+      3  Network connection         (T1071, C2 beaconing)
+      7  Image/DLL load             (T1055 process injection indicators)
+      11 File create                (complements the custom FIM watcher)
+      12/13/14 Registry events      (T1547 persistence)
+      22 DNS query                  (T1071.004 DNS tunneling)
+    Noisy, low-value channels (event 5, 6, 10 process access) are excluded
+    to keep endpoint log volume reasonable for a lab.
+  -->
+  <EventFiltering>
+
+    <ProcessCreate onmatch="exclude">
+      <!-- Exclude the noisiest, near-always-benign system processes -->
+      <Image condition="end with">svchost.exe</Image>
+      <Image condition="end with">conhost.exe</Image>
+    </ProcessCreate>
+
+    <NetworkConnect onmatch="exclude">
+      <DestinationPort condition="is">137</DestinationPort>
+      <DestinationPort condition="is">138</DestinationPort>
+    </NetworkConnect>
+
+    <ImageLoad onmatch="include">
+      <ImageLoaded condition="end with">.dll</ImageLoaded>
+      <Signed condition="is">false</Signed>
+    </ImageLoad>
+
+    <FileCreate onmatch="include">
+      <TargetFilename condition="end with">.exe</TargetFilename>
+      <TargetFilename condition="end with">.dll</TargetFilename>
+      <TargetFilename condition="end with">.ps1</TargetFilename>
+      <TargetFilename condition="contains">\Startup\</TargetFilename>
+    </FileCreate>
+
+    <RegistryEvent onmatch="include">
+      <TargetObject condition="contains">\CurrentVersion\Run</TargetObject>
+      <TargetObject condition="contains">\Winlogon\Shell</TargetObject>
+    </RegistryEvent>
+
+    <DnsQuery onmatch="exclude">
+      <QueryName condition="end with">.microsoft.com</QueryName>
+      <QueryName condition="end with">.windowsupdate.com</QueryName>
+    </DnsQuery>
+
+  </EventFiltering>
+</Sysmon>

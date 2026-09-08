@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wazuh EDR — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+  <style>
+    .engine-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .engine-toggle button {
+      background: var(--bg-input); border: none; color: var(--text-secondary);
+      font-size: 11px; font-family: var(--font-mono); padding: 5px 14px; cursor: pointer;
+    }
+    .engine-toggle button.active { background: var(--accent); color: #fff; }
+    .engine-disabled {
+      position: relative; opacity: 0.4; pointer-events: none; filter: grayscale(60%);
+    }
+    .engine-banner {
+      background: var(--medium-dim); border: 1px solid rgba(234,179,8,0.3);
+      border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4);
+      font-size: 12px; color: var(--medium); display: flex; align-items: center;
+      justify-content: space-between; gap: var(--space-3);
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html" class="active"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🐺</span> Wazuh — Endpoint Detection &amp; Response</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> Manager healthy · 6 agents enrolled</span>
+    <div class="topbar-right">
+      <a href="02_opensearch_siem.html" class="btn btn-ghost btn-sm">View Alerts in OpenSearch ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card info">
+        <div class="kpi-label">Agents Active</div>
+        <div class="kpi-value">6</div>
+        <div class="kpi-sub">6/6 reporting</div>
+      </div>
+      <div class="kpi-card critical">
+        <div class="kpi-label">Critical Alerts (24h)</div>
+        <div class="kpi-value">4</div>
+        <div class="kpi-sub">rule level ≥ 12</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">Total Alerts (24h)</div>
+        <div class="kpi-value">89</div>
+        <div class="kpi-sub">across all agents</div>
+      </div>
+      <div class="kpi-card low">
+        <div class="kpi-label">FIM Events (24h)</div>
+        <div class="kpi-value">0</div>
+        <div class="kpi-sub">syscheck disabled — see File Integrity tab</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">⚙️ Vulnerability Detection Engine</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <p style="font-size:12px;color:var(--text-secondary)">
+          Wazuh ships its own CVE-based vulnerability detector, which overlaps with OpenVAS's scanning.
+          Running both wastes resources and can produce duplicate findings — pick one active engine below.
+          This choice is shared with the <a href="12_openvas_vapt.html" style="color:var(--accent)">OpenVAS VAPT</a> page.
+        </p>
+        <div class="engine-toggle" id="engine-toggle">
+          <button data-engine="openvas" id="btn-openvas">OpenVAS</button>
+          <button data-engine="wazuh" id="btn-wazuh">Wazuh</button>
+        </div>
+        <div id="wazuh-vuln-banner" class="engine-banner" style="display:none">
+          <span>⚠️ Wazuh's vulnerability detector is inactive — OpenVAS is the active scanning engine.</span>
+          <button class="btn btn-primary btn-sm" onclick="setEngine('wazuh')">Use Wazuh instead</button>
+        </div>
+        <div id="wazuh-vuln-content">
+          <div class="grid-3">
+            <div class="kpi-card critical"><div class="kpi-label">Critical CVEs</div><div class="kpi-value">2</div></div>
+            <div class="kpi-card high"><div class="kpi-label">High CVEs</div><div class="kpi-value">7</div></div>
+            <div class="kpi-card medium"><div class="kpi-label">Medium/Low CVEs</div><div class="kpi-value">18</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts feed -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">🚨 Recent Wazuh Alerts</span>
+        <span class="badge badge-accent">LIVE</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Level</th><th>Agent</th><th>Rule</th><th>Description</th><th>MITRE</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td class="mono">13:41:02</td><td><span class="badge badge-critical">15</span></td><td>WIN-DC01</td>
+              <td class="mono">100201</td><td>Multiple authentication failures followed by success — possible brute force</td><td><span class="badge badge-neutral">T1110</span></td>
+            </tr>
+            <tr class="row-suspicious">
+              <td class="mono">13:22:47</td><td><span class="badge badge-critical">14</span></td><td>WKSTN-FINANCE-01</td>
+              <td class="mono">61603</td><td>Windows Defender real-time protection disabled via registry</td><td><span class="badge badge-neutral">T1562.001</span></td>
+            </tr>
+            <tr>
+              <td class="mono">13:05:19</td><td><span class="badge badge-high">10</span></td><td>SRV-FILESERVER-01</td>
+              <td class="mono">100301</td><td>Suspicious process spawned from Office application (winword.exe → powershell.exe)</td><td><span class="badge badge-neutral">T1566.001</span></td>
+            </tr>
+            <tr>
+              <td class="mono">12:58:03</td><td><span class="badge badge-high">9</span></td><td>my-laptop</td>
+              <td class="mono">510</td><td>Host-based anomaly detection event (rootcheck) — hidden process detected</td><td><span class="badge badge-neutral">T1014</span></td>
+            </tr>
+            <tr>
+              <td class="mono">12:40:11</td><td><span class="badge badge-medium">7</span></td><td>SRV-HR-02</td>
+              <td class="mono">18152</td><td>Sysmon — network connection from unusual process (rundll32.exe)</td><td><span class="badge badge-neutral">T1055</span></td>
+            </tr>
+            <tr>
+              <td class="mono">12:15:44</td><td><span class="badge badge-medium">5</span></td><td>WKSTN-LEGAL-05</td>
+              <td class="mono">5501</td><td>Login session opened outside business hours</td><td><span class="badge badge-neutral">T1078</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Agent status -->
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">💻 Agent Status</span></div>
+      <div class="card-body" style="padding-top:var(--space-3)">
+        <div class="grid-3">
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WIN-DC01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-FINANCE-01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-LEGAL-05</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-HR-02</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-FILESERVER-01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">my-laptop</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const ENGINE_KEY = 'soc_vapt_engine';
+function getEngine() { return localStorage.getItem(ENGINE_KEY) || 'openvas'; }
+function setEngine(e) { localStorage.setItem(ENGINE_KEY, e); renderEngineState(); }
+
+function renderEngineState() {
+  const engine = getEngine();
+  document.getElementById('btn-openvas').classList.toggle('active', engine === 'openvas');
+  document.getElementById('btn-wazuh').classList.toggle('active', engine === 'wazuh');
+
+  const banner = document.getElementById('wazuh-vuln-banner');
+  const content = document.getElementById('wazuh-vuln-content');
+  if (engine === 'wazuh') {
+    banner.style.display = 'none';
+    content.classList.remove('engine-disabled');
+  } else {
+    banner.style.display = 'flex';
+    content.classList.add('engine-disabled');
+  }
+}
+
+document.getElementById('btn-openvas').addEventListener('click', () => setEngine('openvas'));
+document.getElementById('btn-wazuh').addEventListener('click', () => setEngine('wazuh'));
+
+renderEngineState();
+</script>
+</body>
+</html>

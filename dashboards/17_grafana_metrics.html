@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grafana Metrics — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html" class="active"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">📈</span> Grafana — Infrastructure Metrics</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> 21 containers monitored</span>
+    <div class="topbar-right">
+      <a href="http://localhost:3000" target="_blank" class="btn btn-ghost btn-sm">Open Grafana ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card low">
+        <div class="kpi-label">Stack Uptime</div>
+        <div class="kpi-value" style="font-size:22px;margin-top:6px">4d 7h</div>
+        <div class="kpi-sub">since last restart</div>
+      </div>
+      <div class="kpi-card info">
+        <div class="kpi-label">Containers Running</div>
+        <div class="kpi-value">21<span style="font-size:16px;color:var(--text-muted)">/21</span></div>
+        <div class="kpi-sub">all healthy</div>
+      </div>
+      <div class="kpi-card medium">
+        <div class="kpi-label">Avg CPU</div>
+        <div class="kpi-value">41%</div>
+        <div class="kpi-sub">host: 8 vCPU</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">Avg Memory</div>
+        <div class="kpi-value">72%</div>
+        <div class="kpi-sub">11.5 / 16 GB used</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">📦 Container Resource Usage</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Container</th><th>CPU</th><th>Memory</th><th>Network I/O</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td>soc-opensearch-1</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:68%;background:var(--high);border-radius:3px"></span></span>68%</td>
+              <td>2.4 / 2 GB</td><td>142 MB / 89 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-opensearch-2</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:44%;background:var(--medium);border-radius:3px"></span></span>44%</td>
+              <td>1.1 / 1 GB</td><td>98 MB / 61 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-crewai</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:52%;background:var(--medium);border-radius:3px"></span></span>52%</td>
+              <td>1.8 GB</td><td>34 MB / 12 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-ollama</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:35%;background:var(--medium);border-radius:3px"></span></span>35%</td>
+              <td>2.9 GB</td><td>2 MB / 1 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-misp</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:22%;background:var(--low);border-radius:3px"></span></span>22%</td>
+              <td>820 MB</td><td>18 MB / 9 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-dfir-iris</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:14%;background:var(--low);border-radius:3px"></span></span>14%</td>
+              <td>410 MB</td><td>5 MB / 2 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+            <tr>
+              <td>soc-vector</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:18%;background:var(--low);border-radius:3px"></span></span>18%</td>
+              <td>256 MB</td><td>210 MB / 205 MB</td><td><span class="badge badge-low">healthy</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
+        This tab summarizes what Grafana's own dashboards show in full detail (per-container time series,
+        alert rules on resource thresholds, disk I/O). Open the real Grafana UI above once it's deployed to
+        drill into history and configure alerting.
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">🛡️ Infra Security & Log Add-ons</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <p style="font-size:12px;color:var(--text-secondary);margin:0">
+          Three CLI/log-only tools that don't have their own dashboard — their output belongs here alongside
+          container health, not as a separate page.
+        </p>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Falco — runtime container security (this stack's own containers)</span><span class="text-muted text-xs mono">not started · no exposed port</span></div>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Trivy/Grype — image CVE scan, runs in GitHub Actions on push</span><span class="text-muted text-xs mono">.github/workflows/image-scan.yml</span></div>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Loki + Promtail — container/app log aggregation, queryable from Grafana</span><span class="text-muted text-xs mono">not started · :3100</span></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

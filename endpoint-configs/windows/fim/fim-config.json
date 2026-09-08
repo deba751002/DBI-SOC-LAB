@@ -1,0 +1,17 @@
+{
+  "watch_paths": [
+    "%USERPROFILE%\\Desktop",
+    "%USERPROFILE%\\Documents",
+    "%USERPROFILE%\\Downloads",
+    "%USERPROFILE%\\SecureWorkspace"
+  ],
+  "include_subdirectories": true,
+  "watched_extensions": [".docx", ".xlsx", ".pptx", ".pdf", ".csv", ".txt", ".zip"],
+  "log_path": "C:\\ProgramData\\SOCLab\\FIM\\fim-events.log",
+  "config_reload_seconds": 300,
+  "forward_to_vector": {
+    "enabled": true,
+    "host": "vector.soc.lab",
+    "port": 6005
+  }
+}

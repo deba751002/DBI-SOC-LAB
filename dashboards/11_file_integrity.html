@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Integrity — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    .fim-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+    .fim-legend .badge { font-size: 10px; }
+
+    .filter-box {
+      cursor: pointer; user-select: none;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+    }
+    .filter-box:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .filter-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .filter-box.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(59,130,246,.18); }
+    .filter-box .kpi-sub { transition: color .15s; }
+    .filter-box.active .kpi-sub { color: var(--accent); }
+    #activity-table tr[hidden] { display: none; }
+
+    .ext-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; min-height: 30px; }
+    .ext-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-dim); color: var(--accent);
+      border: 1px solid rgba(59,130,246,0.3); border-radius: 999px;
+      padding: 4px 6px 4px 12px; font-family: var(--font-mono); font-size: 11px;
+    }
+    .ext-chip button {
+      background: none; border: none; color: var(--accent); cursor: pointer;
+      font-size: 13px; line-height: 1; padding: 2px 6px; border-radius: 50%;
+    }
+    .ext-chip button:hover { background: rgba(59,130,246,0.2); }
+
+    .ext-add-row { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+    .ext-add-row input { flex: 1; }
+
+    .json-preview {
+      background: var(--bg-base); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: var(--space-4);
+      font-family: var(--font-mono); font-size: 11px; line-height: 1.6;
+      color: var(--text-secondary); white-space: pre; overflow-x: auto;
+    }
+    .deploy-cmd {
+      background: var(--bg-base); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4);
+      font-family: var(--font-mono); font-size: 11px; color: var(--low);
+      display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
+      overflow-x: auto;
+    }
+    .save-note { font-size: 11px; color: var(--text-muted); margin-top: var(--space-2); }
+    .save-note.ok { color: var(--low); }
+
+    #activity-table tbody tr[data-file-id] { cursor: pointer; }
+    #activity-table tbody tr[data-file-id]:hover td { background: rgba(59,130,246,0.06); }
+    .row-download-btn { position: relative; z-index: 1; }
+
+    .card-header-right { display: flex; align-items: center; gap: var(--space-3); }
+
+    .filter-btn-wrap { position: relative; }
+    #advanced-filter-panel {
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 200;
+      width: 280px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0,0,0,.4);
+      padding: var(--space-4);
+    }
+    #advanced-filter-panel:not([hidden]) { display: block; }
+    .af-section-label {
+      font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-muted); margin: var(--space-3) 0 var(--space-2);
+    }
+    .af-section-label:first-child { margin-top: 0; }
+    .af-checks { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+    .af-checks label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+    .af-checks input[type="checkbox"] { accent-color: var(--accent); }
+    .af-actions-row { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+    .af-time-range { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--text-secondary); }
+    .af-time-range input[type="time"] {
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text-primary); padding: 5px 8px; font-family: var(--font-mono); font-size: 12px; flex: 1;
+      color-scheme: dark;
+    }
+
+    /* Excel-style column header filter */
+    th { position: relative; }
+    .col-filter-btn {
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 10px; padding: 2px 4px; margin-left: 2px; border-radius: 3px; vertical-align: middle;
+    }
+    .col-filter-btn:hover { background: var(--accent-dim); color: var(--accent); }
+    .col-filter-btn.active { color: var(--accent); background: var(--accent-dim); }
+
+    #col-filter-popover {
+      position: absolute; z-index: 300; width: 220px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0,0,0,.4);
+      padding: var(--space-3);
+    }
+    #col-filter-popover:not([hidden]) { display: block; }
+    .col-filter-search input {
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-primary); padding: 5px 8px;
+      font-size: 12px; margin-bottom: var(--space-2);
+    }
+    .col-filter-selectall {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);
+      cursor: pointer; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+    .col-filter-selectall input { accent-color: var(--accent); }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(5,8,16,0.75);
+      display: none; align-items: center; justify-content: center;
+      z-index: 1000; padding: var(--space-5);
+    }
+    .modal-overlay:not([hidden]) { display: flex; }
+    .modal {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); width: min(820px, 100%);
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--space-3); padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0;
+      background: var(--bg-card); font-size: 12px; color: var(--text-secondary);
+    }
+    .modal-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
+    .modal-body .data-table { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+
+    #modal-restore-row:not([hidden]) { display: flex; align-items: center; gap: var(--space-3); }
+
+    .diff-chip {
+      font-size: 10px; font-family: var(--font-mono); padding: 2px 8px;
+      border-radius: 3px; border: 1px solid var(--border);
+    }
+    .diff-chip.diff-removed { color: var(--critical); background: var(--critical-dim); text-decoration: line-through; }
+    .diff-chip.diff-added   { color: var(--low); background: var(--low-dim); }
+
+    #modal-diff-note { font-size: 11px; color: var(--text-muted); }
+    .change-info {
+      background: var(--accent-dim); border: 1px solid rgba(59,130,246,0.3);
+      border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .change-info-title { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+    .change-info-row { font-size: 12px; color: var(--text-secondary); }
+    .change-info-label { color: var(--text-muted); display: inline-block; min-width: 90px; }
+
+    .diff-line { white-space: pre-wrap; padding: 1px 0; }
+    .diff-removed { color: var(--critical); background: var(--critical-dim); text-decoration: line-through; }
+    .diff-added   { color: var(--low); background: var(--low-dim); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html" class="active"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">DBI SOC · OSS</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🗂️</span> File Integrity Monitoring</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> 6 endpoints reporting</span>
+    <div class="topbar-right">
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card info">
+        <div class="kpi-label">Endpoints Reporting</div>
+        <div class="kpi-value">6</div>
+        <div class="kpi-sub">AD-joined machines</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Events (24h)</div>
+        <div class="kpi-value">342</div>
+        <div class="kpi-sub">↑ 8% vs yesterday</div>
+      </div>
+      <div class="kpi-card low">
+        <div class="kpi-label">Watched File Types</div>
+        <div class="kpi-value" id="kpi-ext-count">7</div>
+        <div class="kpi-sub">admin-configured</div>
+      </div>
+      <div class="kpi-card critical">
+        <div class="kpi-label">Deletions (24h)</div>
+        <div class="kpi-value">12</div>
+        <div class="kpi-sub">review recommended</div>
+      </div>
+    </div>
+
+    <div class="grid-5 mb-4" id="action-filter-row">
+      <div class="kpi-card low filter-box" data-filter="created" tabindex="0" role="button" aria-pressed="false">
+        <div class="kpi-label">Created</div>
+        <div class="kpi-value" id="count-created">128</div>
+        <div class="kpi-sub">click to filter</div>
+      </div>
+      <div class="kpi-card accent filter-box" data-filter="renamed" tabindex="0" role="button" aria-pressed="false">
+        <div class="kpi-label">Renamed</div>
+        <div class="kpi-value" id="count-renamed">61</div>
+        <div class="kpi-sub">click to filter</div>
+      </div>
+      <div class="kpi-card medium filter-box" data-filter="modified" tabindex="0" role="button" aria-pressed="false">
+        <div class="kpi-label">Modified</div>
+        <div class="kpi-value" id="count-modified">94</div>
+        <div class="kpi-sub">click to filter</div>
+      </div>
+      <div class="kpi-card info filter-box" data-filter="moved,copied" tabindex="0" role="button" aria-pressed="false">
+        <div class="kpi-label">Copy / Move</div>
+        <div class="kpi-value" id="count-moved">73</div>
+        <div class="kpi-sub">click to filter</div>
+      </div>
+      <div class="kpi-card critical filter-box" data-filter="deleted" tabindex="0" role="button" aria-pressed="false">
+        <div class="kpi-label">Deleted</div>
+        <div class="kpi-value" id="count-deleted">12</div>
+        <div class="kpi-sub">click to filter</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body" style="padding:var(--space-4)">
+        <div class="fim-legend">
+          <span style="font-size:11px;color:var(--text-muted);margin-right:4px">ACTION LEGEND:</span>
+          <span class="badge badge-low">CREATED</span>
+          <span class="badge badge-medium">MODIFIED</span>
+          <span class="badge badge-accent">RENAMED</span>
+          <span class="badge badge-info">MOVED</span>
+          <span class="badge badge-critical">DELETED</span>
+          <span class="badge badge-neutral">COPIED*</span>
+          <span style="font-size:10px;color:var(--text-muted)">*logged as CREATED — FileSystemWatcher can't tell copies from new files</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live activity feed -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">📜 Live File Activity Feed</span>
+        <div class="card-header-right">
+          <span id="filter-indicator" style="display:none;font-size:11px;color:var(--text-secondary)">
+            <span id="filter-indicator-text"></span>
+            <a href="#" id="filter-reset-link" style="margin-left:8px;color:var(--accent)">Reset ×</a>
+          </span>
+          <button class="btn btn-ghost btn-sm" id="restore-all-btn">📦 Restore All Deleted</button>
+          <div class="filter-btn-wrap">
+            <button class="btn btn-ghost btn-sm" id="advanced-filter-btn">🔧 Advanced Filter</button>
+            <div id="advanced-filter-panel" hidden>
+              <div class="af-section-label">Action type</div>
+              <div class="af-checks" id="af-actions"></div>
+              <div class="af-section-label">AD user</div>
+              <div class="af-checks" id="af-users"></div>
+              <div class="af-section-label">Machine</div>
+              <div class="af-checks" id="af-machines"></div>
+              <div class="af-section-label">Time range</div>
+              <div class="af-time-range">
+                <input type="time" id="af-time-from" step="1">
+                <span>to</span>
+                <input type="time" id="af-time-to" step="1">
+              </div>
+              <div class="af-actions-row">
+                <button class="btn btn-ghost btn-sm" id="af-reset">Reset</button>
+                <button class="btn btn-primary btn-sm" id="af-apply">Apply</button>
+              </div>
+            </div>
+          </div>
+          <span class="badge badge-accent">LIVE</span>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table" id="activity-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Action <button class="col-filter-btn" data-col="action" title="Filter">▾</button></th>
+              <th>AD User <button class="col-filter-btn" data-col="user" title="Filter">▾</button></th>
+              <th>Machine <button class="col-filter-btn" data-col="machine" title="Filter">▾</button></th>
+              <th>File Path</th>
+              <th>Destination</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-action="deleted" data-file-id="f-testfile-pdf" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:40"><td class="mono">13:29:40</td><td><span class="badge badge-critical">DELETED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.pdf</td><td class="mono">C:\Users\DebasishLenka\ShadowArchive\test_file.pdf</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-testfile-pdf">⬇ Download</button></td></tr>
+            <tr data-action="renamed" data-file-id="f-testfile-pptx" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:39"><td class="mono">13:29:39</td><td><span class="badge badge-accent">RENAMED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file_pptx_renamed.pptx</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.pptx</td><td class="mono">—</td></tr>
+            <tr data-action="renamed" data-file-id="f-testfile-csv" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:39"><td class="mono">13:29:39</td><td><span class="badge badge-accent">RENAMED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file_csv_renamed.csv</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.csv</td><td class="mono">—</td></tr>
+            <tr class="row-suspicious" data-action="deleted" data-file-id="f-q3forecast" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="13:12:04"><td class="mono">13:12:04</td><td><span class="badge badge-critical">DELETED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Finance\Q3_forecast.xlsx</td><td class="mono">C:\Users\jsmith\ShadowArchive\Q3_forecast.xlsx</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-q3forecast">⬇ Download</button></td></tr>
+            <tr data-action="created" data-file-id="f-nda-vendor" data-user="CORP\alee" data-machine="WKSTN-LEGAL-05" data-time="13:08:51"><td class="mono">13:08:51</td><td><span class="badge badge-low">CREATED</span></td><td>CORP\alee</td><td>WKSTN-LEGAL-05</td><td class="mono">C:\Users\alee\Contracts\NDA_vendor.docx</td><td class="mono">—</td><td class="mono">—</td></tr>
+            <tr data-action="modified" data-file-id="f-headcount" data-user="CORP\bwilliams" data-machine="SRV-HR-02" data-time="12:57:22"><td class="mono">12:57:22</td><td><span class="badge badge-medium">MODIFIED</span></td><td>CORP\bwilliams</td><td>SRV-HR-02</td><td class="mono">C:\Shares\HR\headcount_2026.xlsx</td><td class="mono">—</td><td class="mono">—</td></tr>
+            <tr data-action="moved" data-file-id="f-invoice419" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="12:44:10"><td class="mono">12:44:10</td><td><span class="badge badge-info">MOVED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Desktop\invoice_419.pdf</td><td class="mono">C:\Users\jsmith\Archive\2026\invoice_419.pdf</td><td class="mono">—</td></tr>
+            <tr class="row-suspicious" data-action="deleted" data-file-id="f-legalreview" data-user="CORP\bwilliams" data-machine="SRV-HR-02" data-time="12:31:47"><td class="mono">12:31:47</td><td><span class="badge badge-critical">DELETED</span></td><td>CORP\bwilliams</td><td>SRV-HR-02</td><td class="mono">C:\Shares\HR\legal_review.docx</td><td class="mono">C:\Shares\HR\.shadowarchive\legal_review.docx</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-legalreview">⬇ Download</button></td></tr>
+            <tr data-action="copied" data-file-id="f-msatemplate" data-user="CORP\alee" data-machine="WKSTN-LEGAL-05" data-time="12:20:03"><td class="mono">12:20:03</td><td><span class="badge badge-neutral">COPIED*</span></td><td>CORP\alee</td><td>WKSTN-LEGAL-05</td><td class="mono">C:\Users\alee\Templates\msa_template.docx</td><td class="mono">C:\Users\alee\Contracts\2026\msa_template.docx</td><td class="mono">—</td></tr>
+            <tr data-action="created" data-file-id="f-weeklysummary" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="12:05:18"><td class="mono">12:05:18</td><td><span class="badge badge-low">CREATED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Reports\weekly_summary.csv</td><td class="mono">—</td><td class="mono">—</td></tr>
+          </tbody>
+        </table>
+        <p id="filter-empty" style="display:none;padding:var(--space-5);text-align:center;color:var(--text-muted);font-size:12px">No events for this action in the current feed sample.</p>
+      </div>
+    </div>
+
+    <!-- Endpoints -->
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">💻 Endpoints Reporting</span></div>
+      <div class="card-body" style="padding-top:var(--space-3)">
+        <div class="grid-3">
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">my-laptop</span><span class="text-muted text-xs mono">AzureAD\DebasishLenka</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-FINANCE-01</span><span class="text-muted text-xs mono">CORP\jsmith</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-LEGAL-05</span><span class="text-muted text-xs mono">CORP\alee</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-HR-02</span><span class="text-muted text-xs mono">CORP\bwilliams</span></div>
+          <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">WIN-DC01</span><span class="text-muted text-xs mono">last seen 14m ago</span></div>
+          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-FILESERVER-01</span><span class="text-muted text-xs mono">SYSTEM</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin configuration -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">⚙️ Admin — Watched File Types</span>
+        <span class="badge badge-neutral">CONFIG</span>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:var(--space-3)">
+          Only files matching these extensions are watched on endpoints. Add or remove types below,
+          then either copy the generated JSON into <span class="mono">fim-config.json</span> on each
+          endpoint (picked up automatically within 5 minutes — no restart needed), or re-run the
+          deploy command shown below to push the change immediately.
+        </p>
+
+        <div class="ext-add-row">
+          <input type="text" class="input" id="ext-input" placeholder="e.g. .docx" maxlength="10">
+          <button class="btn btn-primary" id="ext-add-btn">+ Add</button>
+        </div>
+        <div class="ext-chip-row" id="ext-chips"></div>
+
+        <div class="grid-2" style="margin-top:var(--space-4)">
+          <div>
+            <div class="section-title" style="margin-bottom:var(--space-2)">fim-config.json (watched_extensions)</div>
+            <pre class="json-preview" id="json-preview"></pre>
+          </div>
+          <div>
+            <div class="section-title" style="margin-bottom:var(--space-2)">Push to an endpoint now</div>
+            <div class="deploy-cmd">
+              <span id="deploy-cmd-text">.\Deploy-FIM.ps1 -VectorHost 192.168.10.30</span>
+              <button class="btn btn-ghost btn-sm" id="copy-cmd-btn">Copy</button>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:var(--space-3)">
+              No agent to install — this runs the native PowerShell watcher
+              (<span class="mono">endpoint-configs/windows/fim/</span>) as a Scheduled Task.
+              See its README for GPO / RMM rollout to many machines at once.
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top:var(--space-4)">
+          <button class="btn btn-primary" id="save-btn">💾 Save Configuration</button>
+          <span class="save-note" id="save-note"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><span class="card-title">🔬 Related Endpoint Telemetry</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <p style="font-size:12px;color:var(--text-secondary);margin:0">
+          These two watchers follow the same "no heavy agent" pattern as this page — a lightweight forwarder plus
+          their own dedicated Vector ingestion pipeline, not routed through Wazuh (to avoid double-alerting).
+        </p>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Sysmon — process/network/registry telemetry</span><span class="text-muted text-xs mono">TCP :6000 · endpoint-configs/windows/sysmon/</span></div>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">osquery — posture queries (ports, scheduled tasks, USB)</span><span class="text-muted text-xs mono">TCP :6007 · endpoint-configs/windows/osquery/</span></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="col-filter-popover" hidden>
+  <div class="af-section-label" id="col-filter-title">Filter</div>
+  <div class="col-filter-search"><input type="text" id="col-filter-search" placeholder="Search values..."></div>
+  <label class="col-filter-selectall"><input type="checkbox" id="col-filter-selectall" checked> (Select all)</label>
+  <div class="af-checks" id="col-filter-values"></div>
+  <div class="af-actions-row">
+    <button class="btn btn-ghost btn-sm" id="col-filter-clear">Clear</button>
+    <button class="btn btn-primary btn-sm" id="col-filter-apply">Apply</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="file-modal" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span class="mono" id="modal-path">—</span>
+      <button class="btn btn-ghost btn-sm" id="modal-close">✕ close</button>
+    </div>
+    <div class="modal-body">
+      <table class="data-table">
+        <thead><tr><th>When (UTC)</th><th>Event</th><th>Owner</th><th></th></tr></thead>
+        <tbody id="modal-history-body"></tbody>
+      </table>
+
+      <div id="modal-restore-row" hidden>
+        <button class="btn btn-primary" id="modal-restore-btn">⤒ Restore this file</button>
+        <span class="save-note" id="modal-restore-note"></span>
+      </div>
+
+      <div class="fim-legend">
+        <span class="diff-chip diff-removed">- removed (earlier version)</span>
+        <span class="diff-chip diff-added">+ added (this version)</span>
+      </div>
+
+      <div id="modal-diff-note"></div>
+      <div class="json-preview" id="modal-diff-view"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_EXTENSIONS = ['.docx', '.xlsx', '.pptx', '.pdf', '.csv', '.txt', '.zip'];
+const STORAGE_KEY = 'soc_fim_watched_extensions';
+
+function loadExtensions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return DEFAULT_EXTENSIONS.slice();
+}
+
+let extensions = loadExtensions();
+
+function normalizeExt(raw) {
+  let e = raw.trim().toLowerCase();
+  if (!e) return null;
+  if (!e.startsWith('.')) e = '.' + e;
+  if (!/^\.[a-z0-9]{1,8}$/.test(e)) return null;
+  return e;
+}
+
+function render() {
+  const chipRow = document.getElementById('ext-chips');
+  chipRow.innerHTML = '';
+  extensions.forEach((ext, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'ext-chip';
+    chip.innerHTML = `${ext} <button data-i="${i}" title="Remove">×</button>`;
+    chipRow.appendChild(chip);
+  });
+  chipRow.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      extensions.splice(Number(btn.dataset.i), 1);
+      render();
+    });
+  });
+
+  document.getElementById('kpi-ext-count').textContent = extensions.length;
+
+  const config = {
+    watch_paths: ["%USERPROFILE%\\Desktop", "%USERPROFILE%\\Documents", "%USERPROFILE%\\Downloads", "%USERPROFILE%\\SecureWorkspace"],
+    include_subdirectories: true,
+    watched_extensions: extensions,
+    log_path: "C:\\ProgramData\\SOCLab\\FIM\\fim-events.log",
+    config_reload_seconds: 300,
+    forward_to_vector: { enabled: true, host: "vector.soc.lab", port: 6005 }
+  };
+  document.getElementById('json-preview').textContent = JSON.stringify(config, null, 2);
+
+  const extArgs = extensions.map(e => `"${e}"`).join(',');
+  document.getElementById('deploy-cmd-text').textContent =
+    `.\\Deploy-FIM.ps1 -VectorHost 192.168.10.30 -WatchedExtensions ${extArgs}`;
+}
+
+document.getElementById('ext-add-btn').addEventListener('click', () => {
+  const input = document.getElementById('ext-input');
+  const ext = normalizeExt(input.value);
+  if (ext && !extensions.includes(ext)) {
+    extensions.push(ext);
+    render();
+  }
+  input.value = '';
+  input.focus();
+});
+
+document.getElementById('ext-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('ext-add-btn').click(); }
+});
+
+document.getElementById('copy-cmd-btn').addEventListener('click', () => {
+  const text = document.getElementById('deploy-cmd-text').textContent;
+  navigator.clipboard?.writeText(text).then(() => {
+    const btn = document.getElementById('copy-cmd-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {});
+});
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(extensions));
+  const note = document.getElementById('save-note');
+  note.textContent = 'Saved locally. Apply it on endpoints via the JSON or deploy command above.';
+  note.classList.add('ok');
+  setTimeout(() => { note.textContent = ''; note.classList.remove('ok'); }, 4000);
+});
+
+render();
+
+// ── Unified activity filtering (quick boxes + column filters + advanced panel) ─
+const ALL_ACTIONS = ['created', 'modified', 'renamed', 'moved', 'copied', 'deleted'];
+const ACTION_LABELS = { created: 'Created', modified: 'Modified', renamed: 'Renamed', moved: 'Moved', copied: 'Copied', deleted: 'Deleted' };
+
+const ALL_ROWS = Array.from(document.querySelectorAll('#activity-table tbody tr'));
+const ALL_USERS = [...new Set(ALL_ROWS.map(r => r.dataset.user))].sort();
+const ALL_MACHINES = [...new Set(ALL_ROWS.map(r => r.dataset.machine))].sort();
+
+// Each dimension is either null (no restriction) or a Set of allowed values.
+const filters = { actions: null, users: null, machines: null, timeFrom: null, timeTo: null };
+
+function rowMatchesFilters(row) {
+  if (filters.actions && !filters.actions.has(row.dataset.action)) return false;
+  if (filters.users && !filters.users.has(row.dataset.user)) return false;
+  if (filters.machines && !filters.machines.has(row.dataset.machine)) return false;
+  if (filters.timeFrom && row.dataset.time < filters.timeFrom) return false;
+  if (filters.timeTo && row.dataset.time > filters.timeTo) return false;
+  return true;
+}
+
+function isAnyFilterActive() {
+  return !!(filters.actions || filters.users || filters.machines || filters.timeFrom || filters.timeTo);
+}
+
+function applyFilters() {
+  let visibleCount = 0;
+  ALL_ROWS.forEach(row => {
+    const match = rowMatchesFilters(row);
+    row.hidden = !match;
+    if (match) visibleCount++;
+  });
+
+  const active = isAnyFilterActive();
+  document.getElementById('filter-empty').style.display = (active && visibleCount === 0) ? 'block' : 'none';
+
+  const indicator = document.getElementById('filter-indicator');
+  indicator.style.display = active ? 'inline' : 'none';
+  document.getElementById('filter-indicator-text').textContent = active ? `Showing ${visibleCount} of ${ALL_ROWS.length}` : '';
+
+  // Reflect state on column header filter icons
+  document.querySelectorAll('.col-filter-btn').forEach(btn => {
+    const dim = btn.dataset.col === 'action' ? filters.actions : btn.dataset.col === 'user' ? filters.users : filters.machines;
+    btn.classList.toggle('active', !!dim);
+  });
+
+  // Reflect state on quick filter boxes (only "on" when it's an exact single-action match with nothing else active)
+  document.querySelectorAll('.filter-box').forEach(box => {
+    const boxActions = new Set(box.dataset.filter.split(','));
+    const isExactMatch = filters.actions && filters.actions.size === boxActions.size &&
+      [...filters.actions].every(a => boxActions.has(a)) && !filters.users && !filters.machines && !filters.timeFrom && !filters.timeTo;
+    box.classList.toggle('active', isExactMatch);
+    box.setAttribute('aria-pressed', isExactMatch ? 'true' : 'false');
+  });
+}
+
+function resetAllFilters() {
+  filters.actions = null;
+  filters.users = null;
+  filters.machines = null;
+  filters.timeFrom = null;
+  filters.timeTo = null;
+  document.getElementById('af-time-from').value = '';
+  document.getElementById('af-time-to').value = '';
+  applyFilters();
+}
+
+document.getElementById('filter-reset-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  resetAllFilters();
+});
+
+// Quick single-action filter boxes
+document.querySelectorAll('.filter-box').forEach(box => {
+  const activate = () => {
+    const alreadyExact = box.classList.contains('active');
+    if (alreadyExact) {
+      filters.actions = null;
+    } else {
+      filters.actions = new Set(box.dataset.filter.split(','));
+      filters.users = null;
+      filters.machines = null;
+      filters.timeFrom = null;
+      filters.timeTo = null;
+      document.getElementById('af-time-from').value = '';
+      document.getElementById('af-time-to').value = '';
+    }
+    applyFilters();
+  };
+  box.addEventListener('click', activate);
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+  });
+});
+
+// ── Advanced filter panel (multi-select action / user / machine + time range) ─
+function buildCheckList(containerId, values, labelFn, checkedSet) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  values.forEach(v => {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = v;
+    input.checked = !checkedSet || checkedSet.has(v);
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(labelFn(v)));
+    container.appendChild(label);
+  });
+}
+
+const afPanel = document.getElementById('advanced-filter-panel');
+const afBtn = document.getElementById('advanced-filter-btn');
+
+afBtn.addEventListener('click', () => {
+  const opening = afPanel.hidden;
+  closeColFilterPopover();
+  afPanel.hidden = !afPanel.hidden;
+  if (opening) {
+    buildCheckList('af-actions', ALL_ACTIONS, a => ACTION_LABELS[a], filters.actions);
+    buildCheckList('af-users', ALL_USERS, u => u, filters.users);
+    buildCheckList('af-machines', ALL_MACHINES, m => m, filters.machines);
+    document.getElementById('af-time-from').value = filters.timeFrom || '';
+    document.getElementById('af-time-to').value = filters.timeTo || '';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!afPanel.hidden && !afPanel.contains(e.target) && e.target !== afBtn) {
+    afPanel.hidden = true;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !afPanel.hidden) afPanel.hidden = true;
+});
+
+document.getElementById('af-reset').addEventListener('click', () => {
+  document.querySelectorAll('#af-actions input, #af-users input, #af-machines input').forEach(cb => cb.checked = true);
+  document.getElementById('af-time-from').value = '';
+  document.getElementById('af-time-to').value = '';
+});
+
+document.getElementById('af-apply').addEventListener('click', () => {
+  const checkedActions = Array.from(document.querySelectorAll('#af-actions input:checked')).map(cb => cb.value);
+  const checkedUsers = Array.from(document.querySelectorAll('#af-users input:checked')).map(cb => cb.value);
+  const checkedMachines = Array.from(document.querySelectorAll('#af-machines input:checked')).map(cb => cb.value);
+  const timeFrom = document.getElementById('af-time-from').value;
+  const timeTo = document.getElementById('af-time-to').value;
+
+  filters.actions = checkedActions.length < ALL_ACTIONS.length ? new Set(checkedActions) : null;
+  filters.users = checkedUsers.length < ALL_USERS.length ? new Set(checkedUsers) : null;
+  filters.machines = checkedMachines.length < ALL_MACHINES.length ? new Set(checkedMachines) : null;
+  filters.timeFrom = timeFrom ? timeFrom + ':00' : null;
+  filters.timeTo = timeTo ? timeTo + ':59' : null;
+
+  applyFilters();
+  afPanel.hidden = true;
+});
+
+// ── Excel-style per-column header filter dropdown ─────────────────────────
+const colFilterPopover = document.getElementById('col-filter-popover');
+let colFilterTarget = null; // { dim: 'actions'|'users'|'machines', values: string[] }
+
+function closeColFilterPopover() {
+  colFilterPopover.hidden = true;
+  colFilterTarget = null;
+}
+
+function openColFilterPopover(btn) {
+  afPanel.hidden = true;
+  const col = btn.dataset.col;
+  const dim = col === 'action' ? 'actions' : col === 'user' ? 'users' : 'machines';
+  const allValues = dim === 'actions' ? ALL_ACTIONS : dim === 'users' ? ALL_USERS : ALL_MACHINES;
+  const labelFn = dim === 'actions' ? (v => ACTION_LABELS[v]) : (v => v);
+  colFilterTarget = { dim };
+
+  document.getElementById('col-filter-title').textContent = `Filter — ${btn.closest('th').childNodes[0].textContent.trim()}`;
+  document.getElementById('col-filter-search').value = '';
+  renderColFilterValues(allValues, labelFn, filters[dim]);
+
+  const rect = btn.getBoundingClientRect();
+  colFilterPopover.style.top = `${window.scrollY + rect.bottom + 4}px`;
+  colFilterPopover.style.left = `${window.scrollX + rect.left}px`;
+  colFilterPopover.hidden = false;
+}
+
+function renderColFilterValues(values, labelFn, checkedSet) {
+  const container = document.getElementById('col-filter-values');
+  container.innerHTML = '';
+  values.forEach(v => {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = v;
+    input.checked = !checkedSet || checkedSet.has(v);
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(labelFn(v)));
+    container.appendChild(label);
+  });
+  syncSelectAllCheckbox();
+  container.querySelectorAll('input').forEach(cb => cb.addEventListener('change', syncSelectAllCheckbox));
+}
+
+function syncSelectAllCheckbox() {
+  const boxes = document.querySelectorAll('#col-filter-values input');
+  const allChecked = boxes.length > 0 && Array.from(boxes).every(cb => cb.checked);
+  document.getElementById('col-filter-selectall').checked = allChecked;
+}
+
+let colFilterOpenBtn = null;
+
+document.querySelectorAll('.col-filter-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!colFilterPopover.hidden && colFilterOpenBtn === btn) {
+      closeColFilterPopover();
+      colFilterOpenBtn = null;
+      return;
+    }
+    openColFilterPopover(btn);
+    colFilterOpenBtn = btn;
+  });
+});
+
+document.getElementById('col-filter-search').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#col-filter-values label').forEach(label => {
+    label.style.display = label.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+  });
+});
+
+document.getElementById('col-filter-selectall').addEventListener('change', (e) => {
+  document.querySelectorAll('#col-filter-values input').forEach(cb => { cb.checked = e.target.checked; });
+});
+
+document.getElementById('col-filter-clear').addEventListener('click', () => {
+  if (!colFilterTarget) return;
+  filters[colFilterTarget.dim] = null;
+  applyFilters();
+  closeColFilterPopover();
+});
+
+document.getElementById('col-filter-apply').addEventListener('click', () => {
+  if (!colFilterTarget) return;
+  const checked = Array.from(document.querySelectorAll('#col-filter-values input:checked')).map(cb => cb.value);
+  const allValues = document.querySelectorAll('#col-filter-values input').length;
+  filters[colFilterTarget.dim] = checked.length < allValues ? new Set(checked) : null;
+  applyFilters();
+  closeColFilterPopover();
+});
+
+document.addEventListener('click', (e) => {
+  if (!colFilterPopover.hidden && !colFilterPopover.contains(e.target) && !e.target.classList.contains('col-filter-btn')) {
+    closeColFilterPopover();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !colFilterPopover.hidden) closeColFilterPopover();
+});
+
+// ── Restore deleted files as a ZIP, organized by AD user folder ──────────
+function shortUserFolder(adUser) {
+  // "AzureAD\DebasishLenka" -> "DebasishLenka", "CORP\jsmith" -> "jsmith"
+  return adUser.split('\\').pop();
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Builds <ADUserShortName>/<filename> inside the zip for each fileId, using
+// each file's last known content (the version right before/at deletion).
+async function buildRestoreZip(fileIds) {
+  const zip = new JSZip();
+  fileIds.forEach(fileId => {
+    const file = FILE_HISTORY[fileId];
+    const last = file.versions[file.versions.length - 1];
+    const filename = file.path.split('\\').pop();
+    const folder = shortUserFolder(last.owner);
+    zip.file(`${folder}/${filename}`, last.lines.join('\r\n'));
+  });
+  return zip.generateAsync({ type: 'blob' });
+}
+
+// Single-file restore (used by the modal's Restore button and inline row Download buttons)
+async function downloadLatestVersion(fileId) {
+  const file = FILE_HISTORY[fileId];
+  const filename = file.path.split('\\').pop();
+  const blob = await buildRestoreZip([fileId]);
+  triggerBlobDownload(blob, `${filename}.zip`);
+  return filename;
+}
+
+// Bulk restore — every file currently in a "deleted" state, one file per AD-user folder
+function allDeletedFileIds() {
+  return Object.keys(FILE_HISTORY).filter(id => {
+    const versions = FILE_HISTORY[id].versions;
+    return versions[versions.length - 1].event === 'deleted';
+  });
+}
+
+async function restoreAllDeletedFiles() {
+  const ids = allDeletedFileIds();
+  const blob = await buildRestoreZip(ids);
+  triggerBlobDownload(blob, 'FIM_Restored_Deleted_Files.zip');
+  return ids.length;
+}
+
+document.getElementById('restore-all-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('restore-all-btn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📦 Zipping...';
+  const count = await restoreAllDeletedFiles();
+  btn.textContent = `✓ Restored ${count} files`;
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+});
+
+document.querySelectorAll('.row-download-btn').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Zipping...';
+    await downloadLatestVersion(btn.dataset.fileId);
+    btn.textContent = '✓ Downloaded';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+  });
+});
+
+// ── File history modal ────────────────────────────────────────────────────
+const FILE_HISTORY = {
+  'f-testfile-pdf': {
+    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pdf',
+    versions: [
+      { time: '9/3/2026, 1:15:51 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
+        lines: ['PROJECT NOTES', 'Status: Draft', 'Owner: Debasish', 'Details: Initial outline, not yet reviewed.'] },
+      { time: '9/3/2026, 1:15:52 PM', event: 'modified', owner: 'AzureAD\\DebasishLenka',
+        lines: ['PROJECT NOTES', 'Status: FINAL', 'Owner: Debasish', 'Details: Reviewed and approved by team lead. Ready for submission.'] },
+      { time: '9/3/2026, 1:29:40 PM', event: 'deleted', owner: 'AzureAD\\DebasishLenka',
+        lines: ['PROJECT NOTES', 'Status: FINAL', 'Owner: Debasish', 'Details: Reviewed and approved by team lead. Ready for submission.'],
+        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pdf',
+        to: 'C:\\Users\\DebasishLenka\\ShadowArchive\\test_file.pdf' }
+    ]
+  },
+  'f-testfile-pptx': {
+    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_pptx_renamed.pptx',
+    versions: [
+      { time: '9/3/2026, 1:18:00 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
+        lines: ['Presentation: Q3 Kickoff', 'Slide 1: Agenda', 'Slide 2: Goals & Metrics'] },
+      { time: '9/3/2026, 1:29:39 PM', event: 'renamed', owner: 'AzureAD\\DebasishLenka',
+        lines: ['Presentation: Q3 Kickoff', 'Slide 1: Agenda', 'Slide 2: Goals & Metrics'],
+        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pptx',
+        to: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_pptx_renamed.pptx' }
+    ]
+  },
+  'f-testfile-csv': {
+    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_csv_renamed.csv',
+    versions: [
+      { time: '9/3/2026, 1:19:10 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
+        lines: ['timestamp,event,host', '2026-09-03T13:00:00Z,logon,my-laptop'] },
+      { time: '9/3/2026, 1:29:39 PM', event: 'renamed', owner: 'AzureAD\\DebasishLenka',
+        lines: ['timestamp,event,host', '2026-09-03T13:00:00Z,logon,my-laptop'],
+        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.csv',
+        to: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_csv_renamed.csv' }
+    ]
+  },
+  'f-q3forecast': {
+    path: 'C:\\Users\\jsmith\\Finance\\Q3_forecast.xlsx',
+    versions: [
+      { time: '9/3/2026, 11:40:00 AM', event: 'created', owner: 'CORP\\jsmith',
+        lines: ['Q3 FORECAST', 'Revenue: $2.4M', 'Status: Draft'] },
+      { time: '9/3/2026, 12:50:00 PM', event: 'modified', owner: 'CORP\\jsmith',
+        lines: ['Q3 FORECAST', 'Revenue: $2.9M', 'Status: Final — submitted to finance'] },
+      { time: '9/3/2026, 1:12:04 PM', event: 'deleted', owner: 'CORP\\jsmith',
+        lines: ['Q3 FORECAST', 'Revenue: $2.9M', 'Status: Final — submitted to finance'],
+        from: 'C:\\Users\\jsmith\\Finance\\Q3_forecast.xlsx',
+        to: 'C:\\Users\\jsmith\\ShadowArchive\\Q3_forecast.xlsx' }
+    ]
+  },
+  'f-nda-vendor': {
+    path: 'C:\\Users\\alee\\Contracts\\NDA_vendor.docx',
+    versions: [
+      { time: '9/3/2026, 1:08:51 PM', event: 'created', owner: 'CORP\\alee',
+        lines: ['NON-DISCLOSURE AGREEMENT', 'Parties: Corp Inc. & Vendor LLC', 'Status: Draft — pending legal review'] }
+    ]
+  },
+  'f-headcount': {
+    path: 'C:\\Shares\\HR\\headcount_2026.xlsx',
+    versions: [
+      { time: '9/3/2026, 10:00:00 AM', event: 'created', owner: 'CORP\\bwilliams',
+        lines: ['HEADCOUNT 2026', 'Engineering: 42', 'Sales: 18'] },
+      { time: '9/3/2026, 12:57:22 PM', event: 'modified', owner: 'CORP\\bwilliams',
+        lines: ['HEADCOUNT 2026', 'Engineering: 47', 'Sales: 21'] }
+    ]
+  },
+  'f-invoice419': {
+    path: 'C:\\Users\\jsmith\\Archive\\2026\\invoice_419.pdf',
+    versions: [
+      { time: '9/2/2026, 4:00:00 PM', event: 'created', owner: 'CORP\\jsmith',
+        lines: ['INVOICE #419', 'Amount: $1,240.00', 'Status: Unpaid'] },
+      { time: '9/3/2026, 12:44:10 PM', event: 'moved', owner: 'CORP\\jsmith',
+        lines: ['INVOICE #419', 'Amount: $1,240.00', 'Status: Unpaid'],
+        from: 'C:\\Users\\jsmith\\Desktop\\invoice_419.pdf',
+        to: 'C:\\Users\\jsmith\\Archive\\2026\\invoice_419.pdf' }
+    ]
+  },
+  'f-legalreview': {
+    path: 'C:\\Shares\\HR\\legal_review.docx',
+    versions: [
+      { time: '9/3/2026, 10:30:00 AM', event: 'created', owner: 'CORP\\bwilliams',
+        lines: ['LEGAL REVIEW NOTES', 'Case: Vendor Contract Dispute', 'Status: In review'] },
+      { time: '9/3/2026, 12:31:47 PM', event: 'deleted', owner: 'CORP\\bwilliams',
+        lines: ['LEGAL REVIEW NOTES', 'Case: Vendor Contract Dispute', 'Status: In review'],
+        from: 'C:\\Shares\\HR\\legal_review.docx',
+        to: 'C:\\Shares\\HR\\.shadowarchive\\legal_review.docx' }
+    ]
+  },
+  'f-msatemplate': {
+    path: 'C:\\Users\\alee\\Contracts\\2026\\msa_template.docx',
+    versions: [
+      { time: '8/15/2026, 9:00:00 AM', event: 'created', owner: 'CORP\\alee',
+        lines: ['MASTER SERVICES AGREEMENT TEMPLATE', 'Version: 3.2', 'Status: Approved template'] },
+      { time: '9/3/2026, 12:20:03 PM', event: 'copied', owner: 'CORP\\alee',
+        lines: ['MASTER SERVICES AGREEMENT TEMPLATE', 'Version: 3.2', 'Status: Approved template'],
+        from: 'C:\\Users\\alee\\Templates\\msa_template.docx',
+        to: 'C:\\Users\\alee\\Contracts\\2026\\msa_template.docx' }
+    ]
+  },
+  'f-weeklysummary': {
+    path: 'C:\\Users\\jsmith\\Reports\\weekly_summary.csv',
+    versions: [
+      { time: '9/3/2026, 12:05:18 PM', event: 'created', owner: 'CORP\\jsmith',
+        lines: ['WEEKLY SUMMARY', 'Week: 36', 'Status: Draft'] }
+    ]
+  }
+};
+
+const EVENT_BADGE_CLASS = { created: 'low', modified: 'medium', renamed: 'accent', moved: 'info', copied: 'neutral', deleted: 'critical' };
+
+let currentFileId = null;
+
+function diffLine(text, cls) {
+  const div = document.createElement('div');
+  div.className = cls ? `diff-line diff-${cls}` : 'diff-line';
+  div.textContent = (cls === 'removed' ? '- ' : cls === 'added' ? '+ ' : '  ') + text;
+  return div;
+}
+
+function renderPlainContent(lines) {
+  const container = document.getElementById('modal-diff-view');
+  container.innerHTML = '';
+  lines.forEach(l => container.appendChild(diffLine(l, null)));
+}
+
+function renderDiffContent(oldLines, newLines) {
+  const container = document.getElementById('modal-diff-view');
+  container.innerHTML = '';
+  const max = Math.max(oldLines.length, newLines.length);
+  for (let i = 0; i < max; i++) {
+    const o = oldLines[i], n = newLines[i];
+    if (o !== undefined && n !== undefined) {
+      if (o === n) {
+        container.appendChild(diffLine(o, null));
+      } else {
+        container.appendChild(diffLine(o, 'removed'));
+        container.appendChild(diffLine(n, 'added'));
+      }
+    } else if (o !== undefined) {
+      container.appendChild(diffLine(o, 'removed'));
+    } else if (n !== undefined) {
+      container.appendChild(diffLine(n, 'added'));
+    }
+  }
+}
+
+function basenameOf(p) {
+  return p.split('\\').pop();
+}
+
+const CHANGE_INFO_LABELS = {
+  renamed: { verb: 'Renamed', fromLabel: 'Old name', toLabel: 'New name', pathFromLabel: 'Old path', pathToLabel: 'New path' },
+  moved:   { verb: 'Moved',   fromLabel: 'Old name', toLabel: 'New name', pathFromLabel: 'Moved from', pathToLabel: 'Moved to' },
+  copied:  { verb: 'Copied',  fromLabel: 'Source name', toLabel: 'Copy name', pathFromLabel: 'Copied from', pathToLabel: 'Copied to' },
+  deleted: { verb: 'Deleted', fromLabel: 'File name', toLabel: null, pathFromLabel: 'Original path', pathToLabel: 'Quarantined to' },
+};
+
+function renderChangeInfo(v) {
+  const note = document.getElementById('modal-diff-note');
+  if (!v.from || !v.to) { note.innerHTML = ''; return; }
+
+  const meta = CHANGE_INFO_LABELS[v.event];
+  const oldName = basenameOf(v.from);
+  const newName = basenameOf(v.to);
+  const nameChanged = oldName !== newName;
+
+  let html = `<div class="change-info"><div class="change-info-title">${meta.verb}</div>`;
+  if (nameChanged) {
+    html += `
+      <div class="change-info-row"><span class="change-info-label">${meta.fromLabel}:</span> <span class="mono">${oldName}</span></div>
+      <div class="change-info-row"><span class="change-info-label">${meta.toLabel}:</span> <span class="mono">${newName}</span></div>`;
+  }
+  html += `
+      <div class="change-info-row"><span class="change-info-label">${meta.pathFromLabel}:</span> <span class="mono">${v.from}</span></div>
+      <div class="change-info-row"><span class="change-info-label">${meta.pathToLabel}:</span> <span class="mono">${v.to}</span></div>
+    </div>`;
+  note.innerHTML = html;
+}
+
+function showVersion(fileId, index) {
+  const file = FILE_HISTORY[fileId];
+  const v = file.versions[index];
+  const prev = index > 0 ? file.versions[index - 1] : null;
+
+  renderChangeInfo(v);
+
+  if (v.event === 'deleted' || !prev) {
+    renderPlainContent(v.lines);
+  } else {
+    renderDiffContent(prev.lines, v.lines);
+  }
+}
+
+function openFileModal(fileId) {
+  const file = FILE_HISTORY[fileId];
+  if (!file) return;
+  currentFileId = fileId;
+  document.getElementById('modal-path').textContent = file.path;
+
+  const body = document.getElementById('modal-history-body');
+  body.innerHTML = '';
+  file.versions.forEach((v, i) => {
+    const tr = document.createElement('tr');
+    const label = v.event === 'deleted' ? 'preview content at deletion' : 'preview this version';
+    const tdTime = document.createElement('td'); tdTime.className = 'mono'; tdTime.textContent = v.time;
+    const tdEvent = document.createElement('td');
+    tdEvent.innerHTML = `<span class="badge badge-${EVENT_BADGE_CLASS[v.event] || 'neutral'}">${v.event}</span>`;
+    const tdOwner = document.createElement('td'); tdOwner.textContent = v.owner;
+    const tdBtn = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = label;
+    btn.addEventListener('click', () => showVersion(fileId, i));
+    tdBtn.appendChild(btn);
+    tr.append(tdTime, tdEvent, tdOwner, tdBtn);
+    body.appendChild(tr);
+  });
+
+  const last = file.versions[file.versions.length - 1];
+  document.getElementById('modal-restore-row').hidden = last.event !== 'deleted';
+  document.getElementById('modal-restore-note').textContent = '';
+
+  showVersion(fileId, file.versions.length - 1);
+  document.getElementById('file-modal').hidden = false;
+}
+
+function closeFileModal() {
+  document.getElementById('file-modal').hidden = true;
+  currentFileId = null;
+}
+
+document.querySelectorAll('#activity-table tbody tr[data-file-id]').forEach(row => {
+  row.addEventListener('click', () => openFileModal(row.dataset.fileId));
+});
+
+document.getElementById('modal-close').addEventListener('click', closeFileModal);
+document.getElementById('file-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'file-modal') closeFileModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('file-modal').hidden) closeFileModal();
+});
+
+document.getElementById('modal-restore-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('modal-restore-btn');
+  const note = document.getElementById('modal-restore-note');
+  btn.disabled = true;
+  note.textContent = 'Zipping file...';
+  note.classList.remove('ok');
+
+  const file = FILE_HISTORY[currentFileId];
+  const last = file.versions[file.versions.length - 1];
+  const folder = shortUserFolder(last.owner);
+  const filename = await downloadLatestVersion(currentFileId);
+
+  note.textContent = `Restored — saved to this machine's Downloads\\${filename}.zip (contains ${folder}\\${filename}).`;
+  note.classList.add('ok');
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

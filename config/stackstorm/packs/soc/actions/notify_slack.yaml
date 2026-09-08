@@ -1,0 +1,28 @@
+---
+name: notify_slack
+pack: soc
+runner_type: python-script
+description: >
+  Post a critical alert to Slack (or Microsoft Teams, via its own
+  incoming-webhook URL format) so a human analyst is pinged in real time,
+  instead of only being visible on a dashboard someone has to be looking at.
+enabled: true
+entry_point: notify_slack.py
+parameters:
+  title:
+    type: string
+    description: "Alert title"
+    required: true
+  message:
+    type: string
+    description: "Alert details"
+    required: true
+  severity:
+    type: string
+    description: "Severity label shown in the message"
+    default: "medium"
+    enum: ["low", "medium", "high", "critical"]
+  case_url:
+    type: string
+    description: "Link back to the DFIR-IRIS case, if one was created"
+    default: ""

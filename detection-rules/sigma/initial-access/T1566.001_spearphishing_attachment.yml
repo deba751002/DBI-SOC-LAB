@@ -1,0 +1,28 @@
+title: Spearphishing Attachment — Office Spawning Suspicious Child Process
+id: m4p8n2o5-6l3k-4m0p-n8o3-4q0p3l8o5m1p
+status: production
+description: Detects an Office application (Word/Excel/Outlook) spawning a script
+  interpreter or LOLBin shortly after opening an attachment — the classic macro
+  dropper pattern for initial access via a phishing email.
+author: SOC Lab
+tags: [attack.initial_access, attack.t1566.001]
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_parent:
+    ParentImage|endswith:
+      - '\WINWORD.EXE'
+      - '\EXCEL.EXE'
+      - '\POWERPNT.EXE'
+      - '\OUTLOOK.EXE'
+  selection_child:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\cmd.exe'
+      - '\rundll32.exe'
+  condition: selection_parent and selection_child
+level: high

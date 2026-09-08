@@ -1,0 +1,17 @@
+name: "SOC-007 | T1566.001 — Spearphishing Attachment Delivered"
+type: any
+index: soc-logs-*
+realert: { minutes: 5 }
+filter:
+  - bool:
+      must:
+        - query_string: { query: "mitre_technique:T1566.001*" }
+alert: ["post"]
+http_post_url: "http://stackstorm:9101/v1/webhooks/elastalert"
+http_post_payload:
+  rule_id: "SOC-007"
+  severity: "high"
+  mitre: "T1566.001"
+  host: "%(host.name)s"
+  source_ip: "%(src_ip)s"
+  description: "%(description)s"

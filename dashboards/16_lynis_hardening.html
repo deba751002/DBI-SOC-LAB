@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lynis Hardening — DBI SOC</title>
+  <script>
+    // Applied before CSS/paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html" class="active"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🧱</span> Lynis — System Hardening Audit</div>
+    <span class="topbar-meta"><span class="status-dot yellow"></span> Last full audit 18h ago</span>
+    <div class="topbar-right">
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card medium">
+        <div class="kpi-label">Avg Hardening Index</div>
+        <div class="kpi-value">67<span style="font-size:16px;color:var(--text-muted)">/100</span></div>
+        <div class="kpi-sub">across 6 hosts</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">Warnings</div>
+        <div class="kpi-value">9</div>
+        <div class="kpi-sub">needs attention</div>
+      </div>
+      <div class="kpi-card info">
+        <div class="kpi-label">Suggestions</div>
+        <div class="kpi-value">52</div>
+        <div class="kpi-sub">hardening opportunities</div>
+      </div>
+      <div class="kpi-card low">
+        <div class="kpi-label">Tests Performed</div>
+        <div class="kpi-value">238</div>
+        <div class="kpi-sub">per host, avg</div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">🖥️ Hardening Index by Host</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Host</th><th>Index</th><th>Warnings</th><th>Suggestions</th><th>Last Run</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td>WIN-DC01</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:52%;background:var(--critical);border-radius:3px"></span></span>52</td>
+              <td><span class="badge badge-critical">4</span></td><td>11</td><td class="mono">18h ago</td>
+            </tr>
+            <tr>
+              <td>SRV-FILESERVER-01</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:64%;background:var(--high);border-radius:3px"></span></span>64</td>
+              <td><span class="badge badge-high">2</span></td><td>9</td><td class="mono">18h ago</td>
+            </tr>
+            <tr>
+              <td>SRV-HR-02</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:70%;background:var(--medium);border-radius:3px"></span></span>70</td>
+              <td><span class="badge badge-medium">2</span></td><td>8</td><td class="mono">18h ago</td>
+            </tr>
+            <tr>
+              <td>WKSTN-FINANCE-01</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:73%;background:var(--medium);border-radius:3px"></span></span>73</td>
+              <td><span class="badge badge-medium">1</span></td><td>8</td><td class="mono">18h ago</td>
+            </tr>
+            <tr>
+              <td>WKSTN-LEGAL-05</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:75%;background:var(--low);border-radius:3px"></span></span>75</td>
+              <td>—</td><td>7</td><td class="mono">18h ago</td>
+            </tr>
+            <tr>
+              <td>my-laptop</td>
+              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:78%;background:var(--low);border-radius:3px"></span></span>78</td>
+              <td>—</td><td>9</td><td class="mono">18h ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">⚠️ Top Warnings</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Host</th><th>Test ID</th><th>Warning</th><th>Suggestion</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious">
+              <td>WIN-DC01</td><td class="mono">SMB-3200</td>
+              <td>SMBv1 protocol still enabled</td><td>Disable SMBv1 via Group Policy / PowerShell</td>
+            </tr>
+            <tr class="row-suspicious">
+              <td>WIN-DC01</td><td class="mono">AUTH-9328</td>
+              <td>No account lockout policy configured</td><td>Set lockout threshold to 5 attempts / 15 min</td>
+            </tr>
+            <tr>
+              <td>SRV-FILESERVER-01</td><td class="mono">FIRE-4590</td>
+              <td>Host firewall (Windows Defender Firewall) has inbound rules broader than required</td><td>Restrict inbound rules to required ports only</td>
+            </tr>
+            <tr>
+              <td>SRV-HR-02</td><td class="mono">STRG-1846</td>
+              <td>BitLocker not enabled on data volume</td><td>Enable BitLocker for at-rest encryption</td>
+            </tr>
+            <tr>
+              <td>WKSTN-FINANCE-01</td><td class="mono">PATCH-7392</td>
+              <td>3 pending security updates older than 30 days</td><td>Enforce WSUS/patch management SLA</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-header"><span class="card-title">🔎 Docker Bench Security</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-2)">
+        <p style="font-size:12px;color:var(--text-secondary);margin:0">
+          Lynis audits the host OS above — Docker Bench Security is its Docker-specific counterpart, checking the
+          daemon/container config itself (privileged containers, exposed docker.sock, missing user namespaces).
+          One-shot script, not a running service.
+        </p>
+        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Last run: never</span><span class="text-muted text-xs mono">./security-scan.sh --docker-bench</span></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

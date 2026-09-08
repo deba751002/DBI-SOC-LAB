@@ -1,0 +1,81 @@
+---
+# Orchestrates the SOC Lab's existing endpoint deploy scripts across every
+# host in the inventory - it does not replace those scripts, it runs the
+# same Deploy-*.ps1 files that already exist under endpoint-configs/windows/,
+# just on every machine at once instead of one at a time by hand.
+#
+# Usage:
+#   ansible-playbook playbooks/deploy-endpoint-agents.yml \
+#     -e vector_host=192.168.10.30 -e wazuh_manager_host=192.168.10.30
+#
+# Limit to one host while testing:
+#   ansible-playbook playbooks/deploy-endpoint-agents.yml --limit WIN-DC01
+
+- name: Deploy SOC Lab endpoint agents
+  hosts: soc_lab_endpoints
+  gather_facts: false
+  vars:
+    remote_staging_dir: "C:\\ProgramData\\SOCLab\\ansible-staging"
+
+  tasks:
+    - name: Ensure staging directory exists
+      ansible.windows.win_file:
+        path: "{{ remote_staging_dir }}"
+        state: directory
+
+    - name: Copy Wazuh agent deploy script
+      ansible.windows.win_copy:
+        src: "../../endpoint-configs/windows/wazuh/"
+        dest: "{{ remote_staging_dir }}\\wazuh\\"
+
+    - name: Copy Sysmon deploy script + config
+      ansible.windows.win_copy:
+        src: "../../endpoint-configs/windows/sysmon/"
+        dest: "{{ remote_staging_dir }}\\sysmon\\"
+
+    - name: Copy osquery deploy script + config
+      ansible.windows.win_copy:
+        src: "../../endpoint-configs/windows/osquery/"
+        dest: "{{ remote_staging_dir }}\\osquery\\"
+
+    - name: Copy File Integrity Monitoring watcher
+      ansible.windows.win_copy:
+        src: "../../endpoint-configs/windows/fim/"
+        dest: "{{ remote_staging_dir }}\\fim\\"
+
+    - name: Run Wazuh agent deployment
+      ansible.windows.win_shell: >
+        {{ remote_staging_dir }}\wazuh\Deploy-WazuhAgent.ps1
+        -ManagerHost {{ wazuh_manager_host | default(vector_host) }}
+      register: wazuh_result
+      changed_when: true
+
+    - name: Run Sysmon deployment
+      ansible.windows.win_shell: >
+        {{ remote_staging_dir }}\sysmon\Deploy-Sysmon.ps1
+        -VectorHost {{ vector_host }}
+      register: sysmon_result
+      changed_when: true
+
+    - name: Run osquery deployment
+      ansible.windows.win_shell: >
+        {{ remote_staging_dir }}\osquery\Deploy-Osquery.ps1
+        -VectorHost {{ vector_host }}
+      register: osquery_result
+      changed_when: true
+
+    - name: Run File Integrity Monitoring deployment
+      ansible.windows.win_shell: >
+        {{ remote_staging_dir }}\fim\Deploy-FIM.ps1
+        -VectorHost {{ vector_host }}
+      register: fim_result
+      changed_when: true
+
+    - name: Summarize this host's deployment
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Wazuh:   {{ 'OK' if wazuh_result.rc == 0 else 'FAILED' }}"
+          - "Sysmon:  {{ 'OK' if sysmon_result.rc == 0 else 'FAILED' }}"
+          - "osquery: {{ 'OK' if osquery_result.rc == 0 else 'FAILED' }}"
+          - "FIM:     {{ 'OK' if fim_result.rc == 0 else 'FAILED' }}"

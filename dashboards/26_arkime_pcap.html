@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arkime PCAP — DBI SOC</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('soc_theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="soc-theme.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text"><span class="brand-title">DBI SOC</span><span class="brand-sub">COMMAND CENTER</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html" class="active"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">MITRE ATT&amp;CK v14</div>
+  </nav>
+
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🦑</span> Arkime — Full Packet Capture Search</div>
+    <span class="topbar-meta"><span class="status-dot yellow"></span> Not started — needs one-time db.pl init</span>
+    <div class="topbar-right">
+      <a href="http://localhost:8005" target="_blank" class="btn btn-ghost btn-sm">Open Arkime ↗</a>
+      <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="card mb-4" style="background:rgba(239,68,68,0.08);border:1px solid var(--critical)">
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
+        Storage-heaviest add-on in this stack — full packet capture, not just metadata. Complements Zeek's
+        conn.log when an investigation needs the actual packet bytes, not a summary. Uses this lab's existing
+        OpenSearch as its backend.
+      </div>
+    </div>
+
+    <div class="grid-4 mb-4">
+      <div class="kpi-card info"><div class="kpi-label">PCAP Captured (24h)</div><div class="kpi-value">18.4 GB</div><div class="kpi-sub">at current retention</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Sessions Indexed</div><div class="kpi-value">284K</div><div class="kpi-sub">today</div></div>
+      <div class="kpi-card critical"><div class="kpi-label">Storage Used</div><div class="kpi-value">62%</div><div class="kpi-sub">of allocated volume</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Retention</div><div class="kpi-value" style="font-size:18px;margin-top:4px">7 days</div><div class="kpi-sub">rolling</div></div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">🔍 Recent Sessions</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Src</th><th>Dst</th><th>Protocol</th><th>Bytes</th><th>Tag</th></tr></thead>
+          <tbody>
+            <tr class="row-suspicious"><td class="mono">21:41:02</td><td class="mono">10.0.1.50:52411</td><td class="mono">185.220.101.45:443</td><td>TLS</td><td>4.2 MB</td><td><span class="badge badge-critical">flagged</span></td></tr>
+            <tr><td class="mono">21:40:58</td><td class="mono">10.0.1.22:49120</td><td class="mono">8.8.8.8:443</td><td>TLS</td><td>12 KB</td><td>—</td></tr>
+            <tr class="row-suspicious"><td class="mono">21:38:41</td><td class="mono">10.0.1.50:49120</td><td class="mono">185.220.101.45:80</td><td>HTTP</td><td>890 KB</td><td><span class="badge badge-high">large upload</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
+        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">blue-team-extensions</span>
+        profile. After first start, run once:
+        <span class="mono">docker exec soc-arkime db.pl http://opensearch-node1:9200 init</span>.
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

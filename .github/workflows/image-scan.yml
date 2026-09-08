@@ -1,0 +1,42 @@
+name: Container Image Security Scan
+
+# Runs on every push/PR — scans the Dockerfiles this repo builds itself
+# (custom images only; pulled upstream images like opensearch/misp are
+# already scanned by their own maintainers).
+on:
+  push:
+    paths:
+      - "config/suricata/Dockerfile"
+      - "wazuh-remote-connector/Dockerfile"
+      - "ai-agents/Dockerfile"
+  pull_request:
+    paths:
+      - "config/suricata/Dockerfile"
+      - "wazuh-remote-connector/Dockerfile"
+      - "ai-agents/Dockerfile"
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: suricata
+            context: ./config/suricata
+          - name: wazuh-remote-poller
+            context: ./wazuh-remote-connector
+          - name: ai-agents
+            context: ./ai-agents
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.name }} image
+        run: docker build -t soc-lab/${{ matrix.name }}:scan ${{ matrix.context }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "soc-lab/${{ matrix.name }}:scan"
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"   # fail the workflow if a critical/high CVE is found
