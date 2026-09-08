@@ -31,6 +31,13 @@ openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
   -out "$CERT_DIR/web_certificates/cert.crt" \
   -subj "/CN=dfir-iris" 2>/dev/null
 
+# openssl writes keys as 0600 (owner-only). The nginx container runs as its
+# own non-root user, whose UID doesn't match whoever ran this script on the
+# host, so it can't read a 0600 file it doesn't own. World-readable is fine
+# for a self-signed lab-only cert.
+chmod -R a+r "$CERT_DIR"
+find "$CERT_DIR" -type d -exec chmod a+rx {} +
+
 echo ""
 echo "Done. Certificates written to $CERT_DIR"
 echo "Browsers will show a self-signed-certificate warning when opening"

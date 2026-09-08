@@ -5,8 +5,11 @@ buffer_time:
   minutes: 15
 es_host: opensearch-node1
 es_port: 9200
-es_username: admin
-es_password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD}"
+# No es_username/es_password - OpenSearch's security plugin is disabled
+# cluster-wide (DISABLE_SECURITY_PLUGIN=true), so nothing enforces auth here.
+# This file is a static bind-mount, not passed through docker-compose's
+# variable substitution, so a literal "${VAR}" placeholder here would just
+# be sent as-is rather than being resolved - as this line used to be.
 writeback_index: elastalert2_status
 alert_time_limit:
   days: 2

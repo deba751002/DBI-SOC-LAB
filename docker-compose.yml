@@ -232,7 +232,11 @@ services:
       - TZ=UTC
       - SLACK_WEBHOOK_URL=${ELASTALERT_SLACK_WEBHOOK:-}
     volumes:
-      - ./config/elastalert2/config.yml:/opt/elastalert/config.yml:ro
+      # The image's own run.sh hardcodes "config.yaml" (with an "a") - it
+      # was mounted to config.yml, so elastalert-create-index found no
+      # config, fell back to interactively prompting for the ES host, and
+      # crashed on EOF since Docker has no TTY attached.
+      - ./config/elastalert2/config.yml:/opt/elastalert/config.yaml:ro
       - ./config/elastalert2/rules:/opt/elastalert/rules:ro
     networks:
       soc-net: { ipv4_address: 172.20.0.40 }
@@ -277,7 +281,10 @@ services:
   st2makesecrets:
     image: stackstorm/st2actionrunner:${ST2_VERSION:-3.9.0}
     container_name: soc-st2makesecrets
-    <<: *restart
+    # One-shot key-generation script, not a long-running service - it's
+    # supposed to exit 0 once done. restart: unless-stopped (the shared
+    # *restart anchor) would keep relaunching it forever even after success.
+    restart: "no"
     volumes:
       - ./config/stackstorm/scripts/makesecrets.sh:/makesecrets.sh:ro
       - st-keys:/etc/st2/keys:rw
@@ -756,8 +763,11 @@ services:
       - MISP_URL=http://misp:80
       - MISP_KEY=${MISP_ADMIN_PASSWORD}
       - VELOCIRAPTOR_URL=http://velociraptor:8889
-      - ST2_URL=http://stackstorm:9101
-      - ST2_TOKEN=${ST2_AUTH_TOKEN}
+      # stackstorm:9101 no longer resolves to anything listening on 9101 -
+      # "stackstorm" is now st2web's hostname (serves the UI on port 80);
+      # webhook/API calls need st2api directly, same fix as nginx.conf and
+      # the ElastAlert2 rules.
+      - ST2_URL=http://st2api:9101
     volumes:
       - ./ai-agents:/app:ro
     networks:
