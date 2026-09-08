@@ -11,9 +11,9 @@ C_CYAN='\033[0;36m'; C_DIM='\033[2m'
 
 PASS=0; FAIL=0; WARN=0
 
-pass() { echo -e "  ${C_GREEN}✔${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; ((PASS++)); }
-fail() { echo -e "  ${C_RED}✗${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; ((FAIL++)); }
-warn() { echo -e "  ${C_YELLOW}⚠${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; ((WARN++)); }
+pass() { echo -e "  ${C_GREEN}✔${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; PASS=$((PASS+1)); }
+fail() { echo -e "  ${C_RED}✗${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; FAIL=$((FAIL+1)); }
+warn() { echo -e "  ${C_YELLOW}⚠${C_RESET}  ${C_BOLD}$1${C_RESET} — $2"; WARN=$((WARN+1)); }
 
 http_check() {
   local name="$1" url="$2" expected="${3:-200}"
