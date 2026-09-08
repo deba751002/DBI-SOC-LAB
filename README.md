@@ -1,6 +1,11 @@
-# Enterprise Detection Engineering SOC Lab
+# DBI SOC Lab
 
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE-ATT%26CK-red)](https://attack.mitre.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![100% Open Source](https://img.shields.io/badge/Open%20Source-100%25-brightgreen)](.)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20WSL2%20%7C%20macOS-lightgrey)](.)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-blueviolet)](CONTRIBUTING.md)
 
 > A hands-on, fully open-source Security Operations Center lab running 28+ production-grade tools via Docker Compose. Built for SOC Level 2/3 analyst training, blue team skill development, and adversary emulation — all on a single machine.
 
@@ -162,8 +167,8 @@ Internet / Lab Network
 ### Step 1 — Clone the Repository
 
 ```bash
-git clone https://github.com/deba751002/Enterprise-Detection-Engineering-SOC-Lab.git
-cd Enterprise-Detection-Engineering-SOC-Lab
+git clone https://github.com/deba751002/DBI-SOC-LAB.git
+cd DBI-SOC-LAB
 ```
 
 ### Step 2 — Make Scripts Executable
