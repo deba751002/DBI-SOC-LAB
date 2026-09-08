@@ -1,6 +1,11 @@
 # CrewAI core
+# crewai-tools is NOT a dependency here - nothing in this codebase imports
+# from it (BaseTool comes from crewai.tools, built into the core package).
+# It was pulled in unused and pinned crewai-tools==0.12.0, whose lancedb<0.6.0
+# constraint has since been removed from PyPI entirely, breaking every fresh
+# install. Removed rather than version-bumped, since the dependency itself
+# was dead weight.
 crewai==0.63.6
-crewai-tools==0.12.0
 
 # LangChain + Ollama
 langchain==0.2.16
