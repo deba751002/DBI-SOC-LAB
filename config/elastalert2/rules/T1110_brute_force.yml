@@ -11,7 +11,7 @@ filter:
         - term: { "EventID": "4625" }
         - term: { "event.type": "authentication_failure" }
 alert: ["post"]
-http_post_url: "http://stackstorm:9101/v1/webhooks/elastalert"
+http_post_url: "http://st2api:9101/v1/webhooks/elastalert"
 http_post_payload:
   rule_id: "SOC-002"
   severity: "high"

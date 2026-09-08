@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 MISP_URL   = os.getenv("MISP_URL", "http://misp:80")
 IRIS_URL   = os.getenv("IRIS_URL", "https://dfir-iris:443")
-ST2_URL    = os.getenv("ST2_URL",  "http://stackstorm:9101")
+ST2_URL    = os.getenv("ST2_URL",  "http://st2api:9101")
 OPENSEARCH = os.getenv("OPENSEARCH_URL", "http://opensearch-node1:9200")
 HEADERS    = {"Content-Type": "application/json"}
 

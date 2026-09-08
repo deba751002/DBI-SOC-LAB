@@ -37,6 +37,10 @@ volumes:
   st-configs:
   st-db:
   st-mq:
+  st-redis:
+  st-keys:
+  st-virtualenvs:
+  st-ssh:
   responder-logs:
   wazuh-manager-data:
   wazuh-alerts:
@@ -230,41 +234,225 @@ services:
 
 # ================================================================
 # LAYER 5 — STACKSTORM SOAR
+# StackStorm deprecated its old "all-in-one" image (stackstorm/stackstorm)
+# upstream, replaced by a one-service-per-container architecture (15
+# containers here) — this section mirrors StackStorm's own official
+# st2-docker reference deployment (github.com/StackStorm/st2-docker),
+# hostnames adjusted to this lab's naming. Config files fetched verbatim
+# from that repo live in config/stackstorm/files/ and scripts/.
 # ================================================================
-  stackstorm:
-    image: stackstorm/stackstorm:3.8.1
-    container_name: soc-stackstorm
-    hostname: stackstorm
-    <<: *restart
-    depends_on: [st-mongo, st-rabbitmq]
-    ports:
-      - "${ST2_API_PORT:-9101}:9101"
-      - "${ST2_AUTH_PORT:-9102}:9102"
-    environment:
-      - ST2_AUTH_TOKEN=${ST2_AUTH_TOKEN}
-      - MONGO_HOST=st-mongo
-      - RABBITMQ_HOST=st-rabbitmq
-    volumes:
-      - st-packs:/opt/stackstorm/packs
-      - st-configs:/opt/stackstorm/configs
-      - ./config/stackstorm/packs/soc:/opt/stackstorm/packs/soc:ro
-    networks:
-      soc-net: { ipv4_address: 172.20.0.50 }
-    logging: *logging
-
   st-mongo:
-    image: mongo:7.0
+    image: mongo:4.4
     container_name: soc-st-mongo
+    <<: *restart
     volumes: [st-db:/data/db]
     networks:
-      soc-net: { ipv4_address: 172.20.0.51 }
+      soc-net: { ipv4_address: 172.20.0.170 }
+    logging: *logging
 
   st-rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:3.12
     container_name: soc-st-rabbitmq
+    <<: *restart
     volumes: [st-mq:/var/lib/rabbitmq]
     networks:
-      soc-net: { ipv4_address: 172.20.0.52 }
+      soc-net: { ipv4_address: 172.20.0.171 }
+    logging: *logging
+
+  st-redis:
+    image: redis:7.2
+    container_name: soc-st-redis
+    <<: *restart
+    volumes: [st-redis:/data]
+    networks:
+      soc-net: { ipv4_address: 172.20.0.172 }
+    logging: *logging
+
+  st2makesecrets:
+    image: stackstorm/st2actionrunner:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2makesecrets
+    <<: *restart
+    volumes:
+      - ./config/stackstorm/scripts/makesecrets.sh:/makesecrets.sh:ro
+      - st-keys:/etc/st2/keys:rw
+    command: /makesecrets.sh
+    networks:
+      soc-net: { ipv4_address: 172.20.0.173 }
+    logging: *logging
+
+  st2api:
+    image: stackstorm/st2api:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2api
+    hostname: st2api
+    <<: *restart
+    depends_on: [st-mongo, st-rabbitmq, st-redis, st2makesecrets]
+    environment:
+      - ST2_AUTH_URL=http://st2auth:9100/
+      - ST2_API_URL=http://st2api:9101/
+      - ST2_STREAM_URL=http://st2stream:9102/
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+      - st-keys:/etc/st2/keys:ro
+      - st-configs:/opt/stackstorm/configs:rw
+      - st-packs:/opt/stackstorm/packs:rw
+      - ./config/stackstorm/packs:/opt/stackstorm/packs.dev:rw
+    networks:
+      soc-net: { ipv4_address: 172.20.0.174 }
+    logging: *logging
+
+  st2stream:
+    image: stackstorm/st2stream:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2stream
+    hostname: st2stream
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.175 }
+    logging: *logging
+
+  st2scheduler:
+    image: stackstorm/st2scheduler:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2scheduler
+    <<: *restart
+    depends_on: [st-redis, st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.176 }
+    logging: *logging
+
+  st2workflowengine:
+    image: stackstorm/st2workflowengine:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2workflowengine
+    <<: *restart
+    depends_on: [st-redis, st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+      - st-keys:/etc/st2/keys:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.177 }
+    logging: *logging
+
+  st2auth:
+    image: stackstorm/st2auth:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2auth
+    hostname: st2auth
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+      - ./config/stackstorm/files/htpasswd:/etc/st2/htpasswd:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.178 }
+    logging: *logging
+
+  st2actionrunner:
+    image: stackstorm/st2actionrunner:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2actionrunner
+    <<: *restart
+    depends_on: [st-redis, st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+      - st-configs:/opt/stackstorm/configs:rw
+      - st-packs:/opt/stackstorm/packs:rw
+      - ./config/stackstorm/packs:/opt/stackstorm/packs.dev:rw
+      - st-virtualenvs:/opt/stackstorm/virtualenvs:rw
+      - st-ssh:/home/stanley/.ssh
+      - st-keys:/etc/st2/keys:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.179 }
+    logging: *logging
+
+  st2garbagecollector:
+    image: stackstorm/st2garbagecollector:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2garbagecollector
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.180 }
+    logging: *logging
+
+  st2notifier:
+    image: stackstorm/st2notifier:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2notifier
+    <<: *restart
+    depends_on: [st-redis, st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.181 }
+    logging: *logging
+
+  st2rulesengine:
+    image: stackstorm/st2rulesengine:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2rulesengine
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.182 }
+    logging: *logging
+
+  st2sensorcontainer:
+    image: stackstorm/st2sensorcontainer:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2sensorcontainer
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+      - st-virtualenvs:/opt/stackstorm/virtualenvs:ro
+      - st-packs:/opt/stackstorm/packs:ro
+      - st-configs:/opt/stackstorm/configs:ro
+      - ./config/stackstorm/packs:/opt/stackstorm/packs.dev:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.183 }
+    logging: *logging
+
+  st2timersengine:
+    image: stackstorm/st2timersengine:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2timersengine
+    <<: *restart
+    depends_on: [st2api]
+    volumes:
+      - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
+      - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro
+    networks:
+      soc-net: { ipv4_address: 172.20.0.184 }
+    logging: *logging
+
+  st2web:
+    image: stackstorm/st2web:${ST2_VERSION:-3.9.0}
+    container_name: soc-st2web
+    hostname: stackstorm
+    <<: *restart
+    depends_on: [st2auth, st2api, st2stream]
+    environment:
+      - ST2_AUTH_URL=http://st2auth:9100/
+      - ST2_API_URL=http://st2api:9101/
+      - ST2_STREAM_URL=http://st2stream:9102/
+      - ST2WEB_HTTPS=0
+    volumes:
+      - ./config/stackstorm/scripts/st2web-healthcheck.sh:/st2web-healthcheck.sh:ro
+    ports:
+      - "${ST2_API_PORT:-9101}:80"
+    networks:
+      soc-net: { ipv4_address: 172.20.0.185 }
+    logging: *logging
 
 # ================================================================
 # LAYER 6 — DFIR-IRIS CASE MANAGEMENT
