@@ -99,6 +99,7 @@ def fetch_new_alerts(client: OpenSearch) -> list[dict]:
 
 async def broadcast(message: str):
     """Send message to all connected WebSocket clients."""
+    global CLIENTS
     if not CLIENTS:
         return
     dead = set()
