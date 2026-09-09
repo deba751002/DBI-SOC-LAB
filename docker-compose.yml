@@ -821,12 +821,14 @@ services:
       opensearch-node1: { condition: service_healthy }
     ports:
       - "${WS_PORT:-8765}:8765"
+      - "${WS_HTTP_PORT:-8766}:8766"
     environment:
       - OPENSEARCH_URL=http://opensearch-node1:9200
       - OPENSEARCH_HOST=opensearch-node1
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
       - WS_PORT=8765
+      - WS_HTTP_PORT=8766
     networks:
       soc-net: { ipv4_address: 172.20.0.110 }
     logging: *logging

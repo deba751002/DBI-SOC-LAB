@@ -11,6 +11,7 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from opensearchpy import OpenSearch, OpenSearchException
+from aiohttp import web
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +26,7 @@ OS_USER   = os.getenv("OPENSEARCH_USER", "admin")
 OS_PASS   = os.getenv("OPENSEARCH_PASSWORD", "AdminPassword123!")
 WS_HOST   = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT   = int(os.getenv("WS_PORT", "8765"))
+HTTP_PORT = int(os.getenv("WS_HTTP_PORT", "8766"))
 POLL_SECS = int(os.getenv("POLL_INTERVAL_SECS", "5"))
 
 # Connected client registry
@@ -178,11 +180,168 @@ async def handler(websocket):
         log.info(f"Client disconnected: {client_ip} | total: {len(CLIENTS)}")
 
 
+# ── HTTP API (dashboard drilldowns: feed/charts/tables/single-event) ──
+# The dashboards are static HTML with no server of their own - rather than
+# ship OpenSearch's admin password to every browser so pages can query it
+# directly, this process (which already holds that password server-side)
+# proxies a small set of read-only, purpose-built queries instead.
+
+SURICATA_FILTER = [
+    {"term": {"log_type.keyword": "suricata"}},
+    {"exists": {"field": "alert"}},
+]
+
+
+@web.middleware
+async def cors_middleware(request, handler):
+    if request.method == "OPTIONS":
+        resp = web.Response()
+    else:
+        resp = await handler(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    return resp
+
+
+async def handle_suricata_feed(request):
+    client = get_os_client()
+    limit = min(int(request.query.get("limit", 20)), 100)
+    body = {
+        "query": {"bool": {"filter": SURICATA_FILTER}},
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "size": limit,
+    }
+    resp = client.search(index="soc-logs-*", body=body)
+    hits = [{"id": h["_id"], **h["_source"]} for h in resp["hits"]["hits"]]
+    return web.json_response(hits)
+
+
+async def handle_suricata_summary(request):
+    client = get_os_client()
+
+    def count(extra_filters):
+        return client.count(index="soc-logs-*", body={
+            "query": {"bool": {"filter": SURICATA_FILTER + [
+                {"range": {"@timestamp": {"gte": "now-24h"}}}
+            ] + extra_filters}}
+        })["count"]
+
+    alerts_24h = count([])
+    blocked_24h = count([{"term": {"alert.action.keyword": "blocked"}}])
+
+    agg_resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": SURICATA_FILTER + [
+            {"range": {"@timestamp": {"gte": "now-24h"}}}
+        ]}},
+        "aggs": {
+            "sigs": {"cardinality": {"field": "rule.id.keyword"}},
+            "ips": {"cardinality": {"field": "src_ip.keyword"}},
+        },
+    })
+    return web.json_response({
+        "alerts_24h": alerts_24h,
+        "blocked_24h": blocked_24h,
+        "unique_signatures_24h": agg_resp["aggregations"]["sigs"]["value"],
+        "unique_src_ips_24h": agg_resp["aggregations"]["ips"]["value"],
+    })
+
+
+async def handle_suricata_categories(request):
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": SURICATA_FILTER + [
+            {"range": {"@timestamp": {"gte": "now-24h"}}}
+        ]}},
+        "aggs": {"cats": {"terms": {"field": "rule.category.keyword", "size": 10}}},
+    })
+    buckets = resp["aggregations"]["cats"]["buckets"]
+    return web.json_response([{"category": b["key"], "count": b["doc_count"]} for b in buckets])
+
+
+async def handle_suricata_timeline(request):
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": SURICATA_FILTER + [
+            {"range": {"@timestamp": {"gte": "now-30m"}}}
+        ]}},
+        "aggs": {"tl": {"date_histogram": {
+            "field": "@timestamp", "fixed_interval": "1m", "min_doc_count": 0,
+            "extended_bounds": {"min": "now-30m", "max": "now"},
+        }}},
+    })
+    buckets = resp["aggregations"]["tl"]["buckets"]
+    return web.json_response([{"time": b["key_as_string"], "count": b["doc_count"]} for b in buckets])
+
+
+async def handle_suricata_top_signatures(request):
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": SURICATA_FILTER + [
+            {"range": {"@timestamp": {"gte": "now-24h"}}}
+        ]}},
+        "aggs": {"sigs": {
+            "terms": {"field": "rule.id.keyword", "size": 10, "order": {"_count": "desc"}},
+            "aggs": {"top": {"top_hits": {
+                "size": 1,
+                "sort": [{"@timestamp": {"order": "desc"}}],
+                "_source": ["rule.name", "rule.category", "rule.severity", "alert.action", "@timestamp"],
+            }}},
+        }},
+    })
+    out = []
+    for b in resp["aggregations"]["sigs"]["buckets"]:
+        top_hit = b["top"]["hits"]["hits"][0]
+        top = top_hit["_source"]
+        rule = top.get("rule", {})
+        out.append({
+            "sid": b["key"],
+            "id": top_hit["_id"],
+            "signature": rule.get("name", ""),
+            "category": rule.get("category", ""),
+            "count": b["doc_count"],
+            "last_seen": top.get("@timestamp"),
+            "action": (top.get("alert") or {}).get("action", "allowed"),
+        })
+    return web.json_response(out)
+
+
+async def handle_event_detail(request):
+    """Fetch one full document by its OpenSearch _id, for click-to-drilldown."""
+    doc_id = request.match_info["id"]
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={"query": {"ids": {"values": [doc_id]}}})
+    hits = resp["hits"]["hits"]
+    if not hits:
+        return web.json_response({"error": "not found"}, status=404)
+    h = hits[0]
+    return web.json_response({"id": h["_id"], "index": h["_index"], **h["_source"]})
+
+
+async def start_http_app():
+    app = web.Application(middlewares=[cors_middleware])
+    app.router.add_get("/api/suricata/feed", handle_suricata_feed)
+    app.router.add_get("/api/suricata/summary", handle_suricata_summary)
+    app.router.add_get("/api/suricata/categories", handle_suricata_categories)
+    app.router.add_get("/api/suricata/timeline", handle_suricata_timeline)
+    app.router.add_get("/api/suricata/top_signatures", handle_suricata_top_signatures)
+    app.router.add_get("/api/event/{id}", handle_event_detail)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, WS_HOST, HTTP_PORT)
+    await site.start()
+    log.info(f"HTTP API listening on {WS_HOST}:{HTTP_PORT}")
+
+
 async def main():
     log.info(f"SOC WebSocket Streamer starting on {WS_HOST}:{WS_PORT}")
     log.info(f"OpenSearch: {OS_HOST}:{OS_PORT} | Poll interval: {POLL_SECS}s")
 
     async with websockets.serve(handler, WS_HOST, WS_PORT):
+        await start_http_app()
         await asyncio.gather(
             poll_loop(),
             heartbeat_loop(),
