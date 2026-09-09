@@ -244,13 +244,16 @@ data_dir = "/var/lib/vector"
   inputs   = ["merge_all"]
   endpoint = "http://opensearch-node1:9200"
   mode     = "bulk"
-  index    = "soc-logs-%Y.%m.%d"
   auth.strategy = "basic"
   auth.user     = "admin"
   auth.password = "${OPENSEARCH_INITIAL_ADMIN_PASSWORD}"
   tls.verify_certificate = false
-  bulk.action = "index"
   compression = "none"
+
+  # index/action live under [sinks.<name>.bulk] in 0.38, not top-level.
+  [sinks.opensearch_main.bulk]
+    index  = "soc-logs-%Y.%m.%d"
+    action = "index"
   # No [sinks.opensearch_main.encoding] block - the elasticsearch sink's
   # encoding only accepts only_fields/except_fields/timestamp_format, not
   # codec; it always sends JSON documents, so there's nothing to set here.
