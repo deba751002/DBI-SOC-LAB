@@ -854,6 +854,15 @@ services:
     hostname: wazuh-manager
     <<: *restart
     profiles: ["standalone-wazuh"]
+    # Mounting wazuh-alerts under /var/ossec/logs/alerts makes the image's
+    # own cont-init.d/0-wazuh-init script treat the whole logs/ dir as
+    # "already externally managed" (same issue as the /etc mount above)
+    # and skip fixing its ownership - it's left root:root instead of
+    # root:wazuh, so wazuh-analysisd (which runs as the unprivileged
+    # "wazuh" user) can't create logs/archives/<year>/ and dies outright.
+    # Fix ownership ourselves before handing off to the image's real
+    # entrypoint (/init, an s6-overlay init - confirmed via docker inspect).
+    entrypoint: ["/bin/bash", "-c", "chown -R wazuh:wazuh /var/ossec/logs && exec /init"]
     ports:
       - "${WAZUH_AGENT_PORT:-1514}:1514"      # agent -> manager data (agent connects out)
       - "${WAZUH_ENROLL_PORT:-1515}:1515"     # agent enrollment (agent connects out)
