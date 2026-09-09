@@ -249,7 +249,7 @@ async def handle_suricata_summary(request):
             {"range": {"@timestamp": {"gte": "now-24h"}}}
         ]}},
         "aggs": {
-            "sigs": {"cardinality": {"field": "rule.id.keyword"}},
+            "sigs": {"cardinality": {"field": "rule.id"}},
             "ips": {"cardinality": {"field": "src_ip.keyword"}},
         },
     })
@@ -298,7 +298,7 @@ async def handle_suricata_top_signatures(request):
             {"range": {"@timestamp": {"gte": "now-24h"}}}
         ]}},
         "aggs": {"sigs": {
-            "terms": {"field": "rule.id.keyword", "size": 10, "order": {"_count": "desc"}},
+            "terms": {"field": "rule.id", "size": 10, "order": {"_count": "desc"}},
             "aggs": {"top": {"top_hits": {
                 "size": 1,
                 "sort": [{"@timestamp": {"order": "desc"}}],

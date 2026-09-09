@@ -189,7 +189,11 @@ function timeAgo(iso) {
 }
 
 function sevBadgeClass(sev) {
-  sev = (sev || '').toLowerCase();
+  // Suricata's alert.severity is a NUMBER (1/2/3), not a string - calling
+  // .toLowerCase() on it threw a TypeError that our own try/catch in
+  // loadFeed() silently swallowed, which is why the live feed panel
+  // failed with no visible console error.
+  sev = String(sev == null ? '' : sev).toLowerCase();
   if (sev === 'critical' || sev === '1') return 'critical';
   if (sev === 'high' || sev === '2') return 'high';
   if (sev === 'medium' || sev === '3') return 'medium';
@@ -211,7 +215,7 @@ async function openEventModal(id) {
     ).join('');
     body.innerHTML = `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
   } catch (e) {
-    body.innerHTML = 'Failed to load event detail — is ws-streamer reachable?';
+    console.error('openEventModal failed:', e); body.innerHTML = 'Failed to load event detail — is ws-streamer reachable?';
   }
 }
 function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
@@ -264,7 +268,7 @@ async function loadFeed() {
     }
     document.getElementById('alert-count').textContent = alerts.length + ' alerts';
   } catch (e) {
-    document.getElementById('eve-feed').innerHTML = '<div style="padding:12px;color:var(--text-muted)">Could not reach ws-streamer API.</div>';
+    console.error('loadFeed failed:', e); document.getElementById('eve-feed').innerHTML = '<div style="padding:12px;color:var(--text-muted)">Could not reach ws-streamer API.</div>';
   }
 }
 
@@ -339,7 +343,7 @@ async function loadTopSignatures() {
       tr.addEventListener('click', () => openEventModal(tr.dataset.id))
     );
   } catch (e) {
-    document.getElementById('sig-table-body').innerHTML =
+    console.error('loadTopSignatures failed:', e); document.getElementById('sig-table-body').innerHTML =
       '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Could not reach ws-streamer API.</td></tr>';
   }
 }
