@@ -94,15 +94,10 @@ data_dir = "/var/lib/vector"
     .host.name        = .Computer
     .mitre.technique  = if exists(.EventID) {
       eid = to_int!(.EventID)
-      if eid == 1  { "T1059 — Command and Script Interpreter" }
-      else if eid == 3  { "T1071 — Application Layer Protocol" }
-      else if eid == 7  { "T1055 — Process Injection (ImageLoad)" }
-      else if eid == 8  { "T1055 — CreateRemoteThread" }
-      else if eid == 10 { "T1003 — OS Credential Dumping" }
-      else if eid == 11 { "T1074 — Data Staged" }
-      else if eid == 13 { "T1112 — Modify Registry" }
-      else if eid == 22 { "T1071.004 — DNS" }
-      else { "Unknown" }
+      # VRL requires "else" directly after the previous block's closing
+      # brace, on the same line - a newline in between ends the statement,
+      # which is why this whole chain failed to parse as one expression.
+      if eid == 1  { "T1059 — Command and Script Interpreter" } else if eid == 3  { "T1071 — Application Layer Protocol" } else if eid == 7  { "T1055 — Process Injection (ImageLoad)" } else if eid == 8  { "T1055 — CreateRemoteThread" } else if eid == 10 { "T1003 — OS Credential Dumping" } else if eid == 11 { "T1074 — Data Staged" } else if eid == 13 { "T1112 — Modify Registry" } else if eid == 22 { "T1071.004 — DNS" } else { "Unknown" }
     } else { "N/A" }
   '''
 
