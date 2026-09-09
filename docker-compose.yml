@@ -224,6 +224,12 @@ services:
       - ./config/vector/vector.toml:/etc/vector/vector.toml:ro
       - vector-data:/var/lib/vector
       - zeek-logs:/zeek-logs:ro
+      # zeek-logs' own "current" symlink points at ../spool/logger, which
+      # is the *separate* zeek-spool volume (zeekctl cluster mode writes
+      # live logs to spool/logger and only rotates them into logs/ once
+      # finished) - that symlink can't resolve from inside this container
+      # without also mounting the volume it actually points to.
+      - zeek-spool:/zeek-spool:ro
       - suricata-logs:/suricata-logs:ro
       - wazuh-alerts:/wazuh-alerts:ro
     depends_on:

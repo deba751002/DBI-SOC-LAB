@@ -28,16 +28,17 @@ data_dir = "/var/lib/vector"
   address = "0.0.0.0:6002"
   decoding.codec = "json"
 
-# Zeek writes JSON lines (tuning/json-logs, see config/zeek/local.zeek)
-# straight to the "current" dir of the zeek-logs volume mounted read-only
-# below - there was never a shipper pushing this to a TCP socket, so a
-# socket source here just sat unfed. Tail the files Zeek already writes
-# instead. stats/capture_loss/loaded_scripts are Zeek's own operational
-# logs, not security telemetry, so they're excluded.
+# Zeek writes JSON lines (tuning/json-logs, see config/zeek/local.zeek).
+# zeekctl (cluster mode) writes the LIVE logs straight to spool/logger/ and
+# only rotates finished ones into logs/YYYY-MM-DD/ - the "current" symlink
+# under zeek-logs points at ../spool/logger, a *different* volume, so read
+# directly from the zeek-spool mount instead of chasing that symlink.
+# stats/capture_loss/loaded_scripts/broker/cluster logs are zeekctl's own
+# operational logs, not security telemetry, so they're excluded.
 [sources.zeek_logs]
   type      = "file"
-  include   = ["/zeek-logs/current/*.log"]
-  exclude   = ["/zeek-logs/current/stats.log", "/zeek-logs/current/capture_loss.log", "/zeek-logs/current/loaded_scripts.log"]
+  include   = ["/zeek-spool/logger/*.log"]
+  exclude   = ["/zeek-spool/logger/stats.log", "/zeek-spool/logger/capture_loss.log", "/zeek-spool/logger/loaded_scripts.log", "/zeek-spool/logger/broker.log", "/zeek-spool/logger/cluster.log", "/zeek-spool/logger/stdout.log", "/zeek-spool/logger/stderr.log"]
   read_from = "end"
 
 # Suricata writes eve.json straight to the suricata-logs volume mounted
