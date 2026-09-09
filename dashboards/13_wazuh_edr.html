@@ -110,7 +110,7 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🐺</span> Wazuh — Endpoint Detection &amp; Response</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> Manager healthy · 6 agents enrolled</span>
+    <span class="topbar-meta"><span class="status-dot green"></span> Manager healthy · <span id="topbar-agent-count">—</span> agents active</span>
     <div class="topbar-right">
       <a href="02_opensearch_siem.html" class="btn btn-ghost btn-sm">View Alerts in OpenSearch ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
@@ -122,23 +122,23 @@
     <div class="grid-4 mb-4">
       <div class="kpi-card info">
         <div class="kpi-label">Agents Active</div>
-        <div class="kpi-value">6</div>
-        <div class="kpi-sub">6/6 reporting</div>
+        <div class="kpi-value" id="kpi-agents">—</div>
+        <div class="kpi-sub">reported in last 24h</div>
       </div>
       <div class="kpi-card critical">
         <div class="kpi-label">Critical Alerts (24h)</div>
-        <div class="kpi-value">4</div>
+        <div class="kpi-value" id="kpi-critical">—</div>
         <div class="kpi-sub">rule level ≥ 12</div>
       </div>
       <div class="kpi-card high">
         <div class="kpi-label">Total Alerts (24h)</div>
-        <div class="kpi-value">89</div>
+        <div class="kpi-value" id="kpi-total">—</div>
         <div class="kpi-sub">across all agents</div>
       </div>
       <div class="kpi-card low">
         <div class="kpi-label">FIM Events (24h)</div>
-        <div class="kpi-value">0</div>
-        <div class="kpi-sub">syscheck disabled — see File Integrity tab</div>
+        <div class="kpi-value" id="kpi-fim">—</div>
+        <div class="kpi-sub" id="kpi-fim-sub">syscheck disabled — see File Integrity tab</div>
       </div>
     </div>
 
@@ -177,31 +177,8 @@
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
           <thead><tr><th>Time</th><th>Level</th><th>Agent</th><th>Rule</th><th>Description</th><th>MITRE</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious">
-              <td class="mono">13:41:02</td><td><span class="badge badge-critical">15</span></td><td>WIN-DC01</td>
-              <td class="mono">100201</td><td>Multiple authentication failures followed by success — possible brute force</td><td><span class="badge badge-neutral">T1110</span></td>
-            </tr>
-            <tr class="row-suspicious">
-              <td class="mono">13:22:47</td><td><span class="badge badge-critical">14</span></td><td>WKSTN-FINANCE-01</td>
-              <td class="mono">61603</td><td>Windows Defender real-time protection disabled via registry</td><td><span class="badge badge-neutral">T1562.001</span></td>
-            </tr>
-            <tr>
-              <td class="mono">13:05:19</td><td><span class="badge badge-high">10</span></td><td>SRV-FILESERVER-01</td>
-              <td class="mono">100301</td><td>Suspicious process spawned from Office application (winword.exe → powershell.exe)</td><td><span class="badge badge-neutral">T1566.001</span></td>
-            </tr>
-            <tr>
-              <td class="mono">12:58:03</td><td><span class="badge badge-high">9</span></td><td>my-laptop</td>
-              <td class="mono">510</td><td>Host-based anomaly detection event (rootcheck) — hidden process detected</td><td><span class="badge badge-neutral">T1014</span></td>
-            </tr>
-            <tr>
-              <td class="mono">12:40:11</td><td><span class="badge badge-medium">7</span></td><td>SRV-HR-02</td>
-              <td class="mono">18152</td><td>Sysmon — network connection from unusual process (rundll32.exe)</td><td><span class="badge badge-neutral">T1055</span></td>
-            </tr>
-            <tr>
-              <td class="mono">12:15:44</td><td><span class="badge badge-medium">5</span></td><td>WKSTN-LEGAL-05</td>
-              <td class="mono">5501</td><td>Login session opened outside business hours</td><td><span class="badge badge-neutral">T1078</span></td>
-            </tr>
+          <tbody id="wazuh-feed-body">
+            <tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -211,18 +188,24 @@
     <div class="card mb-4">
       <div class="card-header"><span class="card-title">💻 Agent Status</span></div>
       <div class="card-body" style="padding-top:var(--space-3)">
-        <div class="grid-3">
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WIN-DC01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-FINANCE-01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-LEGAL-05</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-HR-02</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-FILESERVER-01</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">my-laptop</span><span class="text-muted text-xs mono">v4.7.5 · active</span></div>
+        <div class="grid-3" id="agent-status-grid">
+          <div class="job-row"><span style="font-size:12px;color:var(--text-secondary)">Loading…</span></div>
         </div>
       </div>
     </div>
 
   </main>
+</div>
+
+<!-- Event detail modal -->
+<div id="event-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-surface,#1a1f2e);border:1px solid var(--border,#333);border-radius:8px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:600;color:var(--text-primary,#eee)">Event Detail</span>
+      <button onclick="closeEventModal()" style="background:none;border:none;color:var(--text-muted,#94a3b8);font-size:20px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div id="event-modal-body" style="font-size:12px;color:var(--text-secondary,#cbd5e1);"></div>
+  </div>
 </div>
 
 <script>
@@ -250,6 +233,121 @@ document.getElementById('btn-openvas').addEventListener('click', () => setEngine
 document.getElementById('btn-wazuh').addEventListener('click', () => setEngine('wazuh'));
 
 renderEngineState();
+
+// Everything below is fetched from ws-streamer's HTTP API, which proxies
+// real OpenSearch queries against soc-logs-* (log_type: wazuh). It never
+// fabricates data - empty panels mean no Wazuh alerts genuinely matched.
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function levelBadgeClass(level) {
+  if (level >= 12) return 'critical';
+  if (level >= 9) return 'high';
+  if (level >= 6) return 'medium';
+  return 'low';
+}
+function timeAgo(iso) {
+  if (!iso) return 'never';
+  const diffSec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec/60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec/3600)}h ago`;
+  return `${Math.floor(diffSec/86400)}d ago`;
+}
+
+async function openEventModal(id) {
+  const modal = document.getElementById('event-modal');
+  const body = document.getElementById('event-modal-body');
+  body.innerHTML = 'Loading…';
+  modal.style.display = 'flex';
+  try {
+    const res = await fetch(`${API_BASE}/api/event/${encodeURIComponent(id)}`);
+    if (!res.ok) { body.innerHTML = 'Event not found (may have rolled out of the index).'; return; }
+    const doc = await res.json();
+    const rows = flattenForDisplay(doc).map(([k, v]) =>
+      `<tr><td style="padding:4px 10px 4px 0;color:var(--text-muted,#94a3b8);white-space:nowrap;vertical-align:top">${k}</td><td style="padding:4px 0;word-break:break-all">${v}</td></tr>`
+    ).join('');
+    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
+  } catch (e) {
+    body.innerHTML = 'Failed to load event detail — is ws-streamer reachable?';
+  }
+}
+function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
+document.getElementById('event-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'event-modal') closeEventModal();
+});
+function flattenForDisplay(obj, prefix = '') {
+  const out = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object' && !Array.isArray(v)) out.push(...flattenForDisplay(v, key));
+    else out.push([key, Array.isArray(v) ? v.join(', ') : String(v)]);
+  }
+  return out;
+}
+
+async function loadWazuhSummary() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/summary`);
+    const d = await res.json();
+    document.getElementById('kpi-agents').textContent = d.agents_active.toLocaleString();
+    document.getElementById('topbar-agent-count').textContent = d.agents_active.toLocaleString();
+    document.getElementById('kpi-critical').textContent = d.critical_alerts_24h.toLocaleString();
+    document.getElementById('kpi-total').textContent = d.total_alerts_24h.toLocaleString();
+    document.getElementById('kpi-fim').textContent = d.fim_events_24h.toLocaleString();
+    document.getElementById('kpi-fim-sub').textContent =
+      d.fim_events_24h > 0 ? 'file changes detected' : 'syscheck disabled — see File Integrity tab';
+  } catch (e) { /* leave "—" on failure */ }
+}
+
+async function loadWazuhFeed() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/feed?limit=20`);
+    const rows = await res.json();
+    const tbody = document.getElementById('wazuh-feed-body');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No Wazuh alerts yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `<tr style="cursor:pointer" class="${r.level>=12?'row-suspicious':''}" data-id="${r.id}">
+      <td class="mono">${(r.timestamp||'').substring(11,19)}</td>
+      <td><span class="badge badge-${levelBadgeClass(r.level)}">${r.level}</span></td>
+      <td>${r.agent}</td><td class="mono">${r.rule_id}</td><td>${r.description}</td>
+      <td><span class="badge badge-neutral">${r.mitre_technique||'N/A'}</span></td>
+    </tr>`).join('');
+    tbody.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => openEventModal(tr.dataset.id)));
+  } catch (e) {
+    document.getElementById('wazuh-feed-body').innerHTML =
+      '<tr><td colspan="6" style="text-align:center">Could not reach ws-streamer API.</td></tr>';
+  }
+}
+
+async function loadAgents() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/agents`);
+    const agents = await res.json();
+    const grid = document.getElementById('agent-status-grid');
+    if (!agents.length) {
+      grid.innerHTML = '<div class="job-row"><span style="font-size:12px;color:var(--text-secondary)">No agents have reported in the last 7 days.</span></div>';
+      return;
+    }
+    grid.innerHTML = agents.map(a => `<div class="job-row">
+      <span class="status-dot ${a.active?'green':'red'}"></span>
+      <span style="flex:1;font-size:12px">${a.name || a.agent_id} ${a.ip?`(${a.ip})`:''}</span>
+      <span class="text-muted text-xs mono">${a.active?'active':'stale'} · last seen ${timeAgo(a.last_seen)}</span>
+    </div>`).join('');
+  } catch (e) {
+    document.getElementById('agent-status-grid').innerHTML =
+      '<div class="job-row"><span style="font-size:12px">Could not reach ws-streamer API.</span></div>';
+  }
+}
+
+function refreshAll() {
+  loadWazuhSummary();
+  loadWazuhFeed();
+  loadAgents();
+}
+refreshAll();
+setInterval(refreshAll, 10000);
 </script>
 </body>
 </html>
