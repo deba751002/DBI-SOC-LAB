@@ -1,11 +1,15 @@
 # CrewAI core
-# crewai-tools is NOT a dependency here - nothing in this codebase imports
-# from it (BaseTool comes from crewai.tools, built into the core package).
-# It was pulled in unused and pinned crewai-tools==0.12.0, whose lancedb<0.6.0
-# constraint has since been removed from PyPI entirely, breaking every fresh
-# install. Removed rather than version-bumped, since the dependency itself
-# was dead weight.
-crewai==0.63.6
+# crewai==0.63.6 (this repo's original pin) never actually provided
+# crewai.tools.BaseTool - at that version BaseTool lived only in the
+# separate crewai-tools package (crewai_tools.tools.base_tool), while every
+# agent/tool file here does `from crewai.tools import BaseTool`. This must
+# have been broken from day one; it surfaced now because it's this repo's
+# first real container start. BaseTool moved into crewai's own core package
+# at 0.80.0 - 0.105.0 is the latest 0.x release still on pydantic>=2.4.2
+# (matching our pin below; 0.2xx+ requires pydantic>=2.11.9) and no longer
+# needs crewai-tools as a dependency at all - confirmed against the actual
+# published wheel, not just changelog claims.
+crewai==0.105.0
 
 # LangChain + Ollama
 langchain==0.2.16
