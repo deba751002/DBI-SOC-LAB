@@ -323,6 +323,24 @@ async def handle_suricata_top_signatures(request):
     return web.json_response(out)
 
 
+def find_llmnr_poisoners(client, window="now-1h", min_distinct_queries=3, size=20):
+    """A single machine legitimately issuing/answering LLMNR/NBT-NS traffic
+    on port 5355/137 is completely normal Windows behavior - that alone
+    isn't poisoning. Real Responder-style poisoning looks like one host
+    claiming to be many DIFFERENT names, so this only flags responder IPs
+    that show up against several distinct queried names in the window."""
+    resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [{"range": {"@timestamp": {"gte": window}}}]}},
+        "aggs": {"responders": {
+            "terms": {"field": "id.resp_h.keyword", "size": size},
+            "aggs": {"distinct_queries": {"cardinality": {"field": "query.keyword"}}},
+        }},
+    })
+    buckets = resp["aggregations"]["responders"]["buckets"]
+    return [b["key"] for b in buckets if b["distinct_queries"]["value"] >= min_distinct_queries]
+
+
 async def handle_zeek_summary(request):
     client = get_os_client()
 
@@ -333,7 +351,7 @@ async def handle_zeek_summary(request):
 
     connections_1h = count(ZEEK_CONN_FILTER)
     notices_1h = count(ZEEK_NOTICE_FILTER)
-    llmnr_1h = count(ZEEK_LLMNR_FILTER)
+    llmnr_1h = len(find_llmnr_poisoners(client))
 
     dns_resp = client.search(index="soc-logs-*", body={
         "size": 0,
@@ -415,9 +433,19 @@ async def handle_zeek_dns_anomalies(request):
 
 
 async def handle_zeek_llmnr(request):
+    """Only lists traffic to/from responder IPs that already tripped the
+    "answering many different names" heuristic - plain LLMNR/NBT-NS
+    protocol chatter with no such pattern is real, ordinary Windows
+    behavior and is deliberately left out, not swept in as an "attack"."""
     client = get_os_client()
+    poisoner_ips = find_llmnr_poisoners(client)
+    if not poisoner_ips:
+        return web.json_response([])
     resp = client.search(index="soc-logs-*", body={
-        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [{"range": {"@timestamp": {"gte": "now-1h"}}}]}},
+        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [
+            {"range": {"@timestamp": {"gte": "now-1h"}}},
+            {"terms": {"id.resp_h.keyword": poisoner_ips}},
+        ]}},
         "sort": [{"@timestamp": {"order": "desc"}}],
         "size": 10,
     })
