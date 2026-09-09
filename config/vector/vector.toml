@@ -105,7 +105,10 @@ data_dir = "/var/lib/vector"
   type   = "remap"
   inputs = ["linux_auditd"]
   source = '''
-    . = parse_syslog!(.message) ?? .
+    # parse_syslog! (the "!" variant) already aborts the event on failure -
+    # it can never return an error for "??" to coalesce, which is why this
+    # was a hard compile error, not just a redundant no-op.
+    . = parse_syslog!(.message)
     .log_source = "linux"
     .log_type   = "auditd"
     .@timestamp = now()
@@ -224,7 +227,10 @@ data_dir = "/var/lib/vector"
   type   = "remap"
   inputs = ["cloud_logs"]
   source = '''
-    .log_source = del(.cloud_provider) ?? "cloud"
+    # del() removes a field and returns its prior value (or null if it was
+    # never set) - it never errors, so "?? " here couldn't ever trigger;
+    # express the same "default to cloud" intent with exists() instead.
+    .log_source = if exists(.cloud_provider) { del(.cloud_provider) } else { "cloud" }
     .log_type   = "cloudlog"
     .@timestamp = now()
   '''
