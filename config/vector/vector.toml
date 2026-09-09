@@ -251,6 +251,12 @@ data_dir = "/var/lib/vector"
   inputs   = ["merge_all"]
   endpoint = "http://opensearch-node1:9200"
   mode     = "bulk"
+  # Vector's elasticsearch sink defaults to including a "_type" field in
+  # each bulk metadata line (a pre-ES7 mapping-type concept) - OpenSearch
+  # 2.x has no notion of doc types at all and rejects it outright with
+  # "unknown parameter [_type]", which silently dropped every single
+  # document this sink ever tried to index.
+  suppress_type_name = true
   auth.strategy = "basic"
   auth.user     = "admin"
   auth.password = "${OPENSEARCH_INITIAL_ADMIN_PASSWORD}"
