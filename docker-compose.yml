@@ -201,8 +201,9 @@ services:
       - "${VECTOR_WINDOWS_PORT:-6000}:6000"
       - "${VECTOR_LINUX_PORT:-6001}:6001"
       - "${VECTOR_CLOUD_PORT:-6002}:6002"
-      - "${VECTOR_ZEEK_PORT:-6003}:6003"
-      - "${VECTOR_SURICATA_PORT:-6004}:6004"
+      # 6003/6004 (Zeek/Suricata) dropped - Vector now tails their log
+      # files directly (see config/vector/vector.toml), it never had a
+      # shipper pushing to those sockets.
       - "${VECTOR_FIM_PORT:-6005}:6005"
       - "${VECTOR_WAZUH_REMOTE_PORT:-6006}:6006"
       - "${VECTOR_OSQUERY_PORT:-6007}:6007"
@@ -371,6 +372,14 @@ services:
     container_name: soc-st2actionrunner
     <<: *restart
     depends_on: [st-redis, st2api]
+    environment:
+      # Consumed by config/stackstorm/packs/soc/actions/create_incident.py,
+      # which os.getenv()s these - they were never set anywhere, so the
+      # action always fell back to its (also wrong) hardcoded defaults.
+      - IRIS_URL=https://dfir-iris:443
+      - IRIS_API_KEY=${IRIS_API_KEY:-}
+      - CREWAI_URL=http://crewai-soc:8500
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
     volumes:
       - ./config/stackstorm/files/st2.docker.conf:/etc/st2/st2.docker.conf:ro
       - ./config/stackstorm/files/st2.user.conf:/etc/st2/st2.user.conf:ro

@@ -11,7 +11,10 @@ from st2common.runners.base_action import Action
 class CreateIncidentAction(Action):
     def run(self, title, description, severity=3, source_ip="",
             hostname="", mitre_technique="", trigger_ai=True):
-        iris_url = os.getenv("IRIS_URL", "http://dfir-iris:8000")
+        # dfir-iris is the nginx front container - it only ever listens on
+        # 443 (TLS), never 8000 (that's iris-app's internal upstream port,
+        # not reachable directly from other containers on soc-net).
+        iris_url = os.getenv("IRIS_URL", "https://dfir-iris:443")
         iris_key = os.getenv("IRIS_API_KEY", "")
         headers = {"Authorization": f"Bearer {iris_key}", "Content-Type": "application/json"}
 
@@ -44,7 +47,12 @@ class CreateIncidentAction(Action):
                         "severity": ["", "low", "low", "medium", "high", "critical"][severity],
                         "mission": "incident_response",
                     }
-                    requests.post("http://crewai-soc:8000/analyze/alert",
+                    # crewai-soc's FastAPI app listens on 8500 (see
+                    # ai-agents/Dockerfile CREWAI_API_PORT), not 8000 - this
+                    # call silently failed against the wrong port for every
+                    # incident until now, since the caller swallows the error.
+                    crewai_url = os.getenv("CREWAI_URL", "http://crewai-soc:8500")
+                    requests.post(f"{crewai_url}/analyze/alert",
                                   json=ai_payload, timeout=5)
                 except Exception:
                     pass

@@ -1,16 +1,18 @@
 ---
 name: on_responder_llmnr_alert
 pack: soc
-description: "Trigger Responder/LLMNR response when T1557 fires"
+description: "Trigger Responder/LLMNR response when ElastAlert fires SOC-006 (T1557)"
 enabled: true
 trigger:
   type: core.st2.webhook
   parameters:
     url: elastalert
 criteria:
-  trigger.body.rule_name:
+  # ElastAlert2's http_post_payload sends rule_id (e.g. "SOC-006"), never
+  # rule_name - matching on rule_name here meant this rule never fired.
+  trigger.body.rule_id:
     type: iequals
-    pattern: "T1557_responder"
+    pattern: "SOC-006"
 action:
   ref: soc.create_incident
   parameters:

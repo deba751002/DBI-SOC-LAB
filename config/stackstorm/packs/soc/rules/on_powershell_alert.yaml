@@ -1,22 +1,24 @@
 ---
 name: on_powershell_alert
 pack: soc
-description: "Trigger PS response when ElastAlert fires T1059"
+description: "Trigger PS response when ElastAlert fires SOC-001 (T1059.001)"
 enabled: true
 trigger:
   type: core.st2.webhook
   parameters:
     url: elastalert
 criteria:
-  trigger.body.rule_name:
+  # ElastAlert2's http_post_payload sends rule_id (e.g. "SOC-001"), never
+  # rule_name - matching on rule_name here meant this rule never fired.
+  trigger.body.rule_id:
     type: iequals
-    pattern: "T1059_powershell"
+    pattern: "SOC-001"
 action:
   ref: soc.create_incident
   parameters:
-    title: "Encoded PowerShell Execution — {{trigger.body.hostname}}"
-    description: "Suspicious PowerShell with encoded command on {{trigger.body.hostname}}"
-    severity: 4
-    hostname: "{{trigger.body.hostname}}"
+    title: "Encoded PowerShell Execution — {{trigger.body.host}}"
+    description: "Suspicious PowerShell on {{trigger.body.host}} by {{trigger.body.user}}: {{trigger.body.command}}"
+    severity: 5
+    hostname: "{{trigger.body.host}}"
     mitre_technique: T1059.001
     trigger_ai: true

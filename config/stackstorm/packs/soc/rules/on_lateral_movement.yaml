@@ -1,0 +1,21 @@
+---
+name: on_lateral_movement_alert
+pack: soc
+description: "Trigger incident response when ElastAlert fires SOC-004 (T1021 lateral movement)"
+enabled: true
+trigger:
+  type: core.st2.webhook
+  parameters:
+    url: elastalert
+criteria:
+  trigger.body.rule_id:
+    type: iequals
+    pattern: "SOC-004"
+action:
+  ref: soc.create_incident
+  parameters:
+    title: "Lateral Movement via Remote Services Detected"
+    description: "ElastAlert detected explicit-credential logon or connection to a remote-admin port (445/135/3389/5985/5986)."
+    severity: 4
+    mitre_technique: T1021
+    trigger_ai: true

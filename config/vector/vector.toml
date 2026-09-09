@@ -23,15 +23,24 @@ data_dir = "/var/lib/vector"
   address = "0.0.0.0:6002"
   decoding.codec = "json"
 
+# Zeek writes JSON lines (tuning/json-logs, see config/zeek/local.zeek)
+# straight to the "current" dir of the zeek-logs volume mounted read-only
+# below - there was never a shipper pushing this to a TCP socket, so a
+# socket source here just sat unfed. Tail the files Zeek already writes
+# instead. stats/capture_loss/loaded_scripts are Zeek's own operational
+# logs, not security telemetry, so they're excluded.
 [sources.zeek_logs]
-  type    = "socket"
-  mode    = "tcp"
-  address = "0.0.0.0:6003"
+  type      = "file"
+  include   = ["/zeek-logs/current/*.log"]
+  exclude   = ["/zeek-logs/current/stats.log", "/zeek-logs/current/capture_loss.log", "/zeek-logs/current/loaded_scripts.log"]
+  read_from = "end"
 
+# Suricata writes eve.json straight to the suricata-logs volume mounted
+# read-only below - same fix as zeek_logs above.
 [sources.suricata_eve]
-  type    = "socket"
-  mode    = "tcp"
-  address = "0.0.0.0:6004"
+  type      = "file"
+  include   = ["/suricata-logs/eve.json"]
+  read_from = "end"
 
 [sources.file_integrity]
   type    = "socket"

@@ -1,0 +1,22 @@
+---
+name: on_c2_beacon_alert
+pack: soc
+description: "Trigger incident response when ElastAlert fires SOC-005 (T1071 C2 beacon)"
+enabled: true
+trigger:
+  type: core.st2.webhook
+  parameters:
+    url: elastalert
+criteria:
+  trigger.body.rule_id:
+    type: iequals
+    pattern: "SOC-005"
+action:
+  ref: soc.create_incident
+  parameters:
+    title: "C2 Beacon Detected — {{trigger.body.source_ip}} → {{trigger.body.dest_ip}}"
+    description: "Suricata signature '{{trigger.body.rule_name}}' fired between {{trigger.body.source_ip}} and {{trigger.body.dest_ip}}."
+    severity: 5
+    source_ip: "{{trigger.body.source_ip}}"
+    mitre_technique: T1071
+    trigger_ai: true

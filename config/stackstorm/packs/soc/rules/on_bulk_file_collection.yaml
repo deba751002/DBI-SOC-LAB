@@ -1,0 +1,22 @@
+---
+name: on_bulk_file_collection_alert
+pack: soc
+description: "Trigger incident response when ElastAlert fires SOC-008 (T1039 bulk file collection)"
+enabled: true
+trigger:
+  type: core.st2.webhook
+  parameters:
+    url: elastalert
+criteria:
+  trigger.body.rule_id:
+    type: iequals
+    pattern: "SOC-008"
+action:
+  ref: soc.create_incident
+  parameters:
+    title: "Bulk File Collection from Network Share — {{trigger.body.host}}"
+    description: "{{trigger.body.description}} (user: {{trigger.body.user}})"
+    severity: 3
+    hostname: "{{trigger.body.host}}"
+    mitre_technique: T1039
+    trigger_ai: true
