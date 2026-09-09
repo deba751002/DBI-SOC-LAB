@@ -862,7 +862,12 @@ services:
     # "wazuh" user) can't create logs/archives/<year>/ and dies outright.
     # Fix ownership ourselves before handing off to the image's real
     # entrypoint (/init, an s6-overlay init - confirmed via docker inspect).
-    entrypoint: ["/bin/bash", "-c", "chown -R wazuh:wazuh /var/ossec/logs && exec /init"]
+    # The same skip also means the archives/ and firewall/ subdirectories
+    # normally created by that init script never get created at all -
+    # analysisd's mkdir() there is a plain mkdir, not mkdir -p, so it can't
+    # create archives/<year>/ if archives/ itself is missing (fails with
+    # ENOENT, not a permissions error - ownership alone wasn't enough).
+    entrypoint: ["/bin/bash", "-c", "mkdir -p /var/ossec/logs/archives /var/ossec/logs/firewall && chown -R wazuh:wazuh /var/ossec/logs && exec /init"]
     ports:
       - "${WAZUH_AGENT_PORT:-1514}:1514"      # agent -> manager data (agent connects out)
       - "${WAZUH_ENROLL_PORT:-1515}:1515"     # agent enrollment (agent connects out)
