@@ -166,6 +166,13 @@ data_dir = "/var/lib/vector"
   inputs = ["wazuh_alerts"]
   source = '''
     . = parse_json!(.message)
+    # Zeek's dotted field names (id.orig_h, id.orig_p, ...) make OpenSearch's
+    # dynamic mapping treat "id" as an object - Wazuh's own top-level "id"
+    # (its alert ID, a plain string) then collides with that mapping and
+    # every single wazuh document gets silently rejected at bulk-index time
+    # ("object mapping for [id] tried to parse field [id] as object, but
+    # found a concrete value"). Rename it out of the way.
+    .wazuh_alert_id = del(.id)
     .log_source  = "endpoint"
     .log_type    = "wazuh"
     .@timestamp  = now()
@@ -187,6 +194,9 @@ data_dir = "/var/lib/vector"
   type   = "remap"
   inputs = ["wazuh_remote"]
   source = '''
+    # Same "id" vs. Zeek's id.orig_h/id.orig_p mapping collision as
+    # parse_wazuh above - rename it out of the way.
+    .wazuh_alert_id = del(.id)
     .log_source  = "endpoint"
     .log_type    = "wazuh-remote"
     .@timestamp  = now()
