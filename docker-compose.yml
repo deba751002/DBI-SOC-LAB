@@ -194,6 +194,13 @@ services:
     container_name: soc-vector
     hostname: vector
     <<: *restart
+    # The image's own default entrypoint args load /etc/vector/vector.yaml
+    # (its baked-in demo config, complete with a demo_logs fixture source) -
+    # our vector.toml bind-mounted below at /etc/vector/vector.toml was
+    # never actually passed to the binary, so none of our sources/sinks
+    # ever ran and nothing from this whole pipeline ever reached
+    # OpenSearch, regardless of any other fix.
+    command: ["--config", "/etc/vector/vector.toml"]
     ports:
       - "${VECTOR_API_PORT:-8686}:8686"
       - "${VECTOR_SYSLOG_UDP:-514}:514/udp"
