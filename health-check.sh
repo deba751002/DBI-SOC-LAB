@@ -76,7 +76,8 @@ echo
 echo -e "  ${C_BOLD}Security Tools${C_RESET}"
 http_check      "DFIR-IRIS"    "https://localhost:8443"
 http_check      "MISP"         "http://localhost:8080"
-http_check      "Velociraptor" "http://localhost:8889"
+# Velociraptor's GUI is HTTPS-only (self-signed); plain HTTP gets a 400.
+http_check      "Velociraptor" "https://localhost:8889"
 http_check      "StackStorm"   "http://localhost:9101"
 container_check "ElastAlert2"  "soc-elastalert2"
 
