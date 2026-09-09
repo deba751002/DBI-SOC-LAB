@@ -201,6 +201,12 @@ services:
     # ever ran and nothing from this whole pipeline ever reached
     # OpenSearch, regardless of any other fix.
     command: ["--config", "/etc/vector/vector.toml"]
+    environment:
+      # vector.toml interpolates this itself (${OPENSEARCH_INITIAL_ADMIN_PASSWORD})
+      # at load time from the container's own environment - docker-compose's
+      # own ${...} substitution in this file doesn't reach into the
+      # container unless the var is also listed here.
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
     ports:
       - "${VECTOR_API_PORT:-8686}:8686"
       - "${VECTOR_SYSLOG_UDP:-514}:514/udp"
