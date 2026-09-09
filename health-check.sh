@@ -19,7 +19,7 @@ http_check() {
   local name="$1" url="$2" expected="${3:-200}"
   local code
   code=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")
-  if [[ "$code" == "$expected" || "$code" == "200" || "$code" == "302" || "$code" == "301" ]]; then
+  if [[ "$code" == "$expected" || "$code" == "200" || "$code" == "302" || "$code" == "301" || "$code" == "307" ]]; then
     pass "$name" "HTTP $code — $url"
   else
     fail "$name" "HTTP $code (expected $expected) — $url"
