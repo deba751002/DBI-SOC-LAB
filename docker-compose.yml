@@ -504,6 +504,7 @@ services:
       # takes effect on a genuinely fresh dfir-iris-db volume, see the SQL
       # file's own comment.
       - ./config/dfir-iris/00-init-pgcrypto.sql:/docker-entrypoint-initdb.d/00-init-pgcrypto.sql:ro
+      - ./config/dfir-iris/01-create-iris-db.sql:/docker-entrypoint-initdb.d/01-create-iris-db.sql:ro
     networks:
       soc-net: { ipv4_address: 172.20.0.61 }
     logging: *logging
