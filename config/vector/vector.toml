@@ -251,9 +251,9 @@ data_dir = "/var/lib/vector"
   tls.verify_certificate = false
   bulk.action = "index"
   compression = "none"
-
-  [sinks.opensearch_main.encoding]
-    codec = "json"
+  # No [sinks.opensearch_main.encoding] block - the elasticsearch sink's
+  # encoding only accepts only_fields/except_fields/timestamp_format, not
+  # codec; it always sends JSON documents, so there's nothing to set here.
 
 [sinks.vector_prom]
   type    = "prometheus_exporter"
