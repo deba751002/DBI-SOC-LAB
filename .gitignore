@@ -60,3 +60,6 @@ ansible/*.retry
 
 # DFIR-IRIS — generated self-signed certs/keys, never committed
 config/dfir-iris/certificates/
+
+# Local-only test scripts/checklists - never pushed
+testing/
