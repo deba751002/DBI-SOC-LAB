@@ -54,9 +54,14 @@ def fetch_new_alerts(client: OpenSearch) -> list[dict]:
                     {"range": {"@timestamp": {"gt": last_seen_ts}}},
                 ],
                 "should": [
-                    {"exists": {"field": "mitre_technique"}},
+                    # Vector's transforms all nest this as mitre.technique
+                    # (an object field), never a flat top-level
+                    # "mitre_technique" - that field never existed, so this
+                    # clause never matched anything.
+                    {"exists": {"field": "mitre.technique"}},
                     {"term": {"event_type.keyword": "alert"}},
                     {"term": {"log_type.keyword": "suricata"}},
+                    {"term": {"log_type.keyword": "wazuh"}},
                 ],
                 "minimum_should_match": 1,
             }
@@ -75,9 +80,9 @@ def fetch_new_alerts(client: OpenSearch) -> list[dict]:
                 "timestamp": s.get("@timestamp"),
                 "type": s.get("event_type") or s.get("log_type") or "event",
                 "mitre_tactic": s.get("mitre_tactic", ""),
-                "mitre_technique": s.get("mitre_technique", ""),
+                "mitre_technique": (s.get("mitre") or {}).get("technique", ""),
                 "severity": s.get("severity") or (s.get("alert") or {}).get("severity", "medium"),
-                "src_ip": s.get("src_ip") or (s.get("source") or {}).get("ip", ""),
+                "src_ip": s.get("src_ip") or (s.get("source") or {}).get("ip", "") or (s.get("agent") or {}).get("ip", ""),
                 "dest_ip": s.get("dest_ip") or (s.get("destination") or {}).get("ip", ""),
                 "hostname": s.get("hostname") or (s.get("host") or {}).get("name", ""),
                 "message": s.get("message") or (s.get("alert") or {}).get("signature", ""),
