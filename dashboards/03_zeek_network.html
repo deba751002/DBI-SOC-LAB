@@ -121,7 +121,7 @@
       <div class="kpi-card critical">
         <div class="kpi-label">LLMNR/NBNS</div>
         <div class="kpi-value" id="kpi-llmnr">—</div>
-        <div class="kpi-sub">responders answering 3+ names</div>
+        <div class="kpi-sub">query volume, port 5355/137</div>
       </div>
     </div>
 
@@ -168,19 +168,18 @@
       <!-- LLMNR/NBNS -->
       <div class="card">
         <div class="card-header">
-          <span class="card-title">☠️ LLMNR / NBNS Activity</span>
-          <span class="badge badge-critical">T1557.001</span>
+          <span class="card-title">📡 LLMNR / NBT-NS Query Volume</span>
+          <span class="badge badge-neutral">T1557.001 — see Suricata for confirmed poisoning</span>
         </div>
         <div class="card-body" style="padding-top:var(--space-3)">
           <table class="data-table">
-            <thead><tr><th>Time</th><th>Victim</th><th>Poison IP</th><th>Resource</th></tr></thead>
+            <thead><tr><th>Time</th><th>Querier</th><th>Destination</th><th>Resource</th></tr></thead>
             <tbody id="llmnr-body">
               <tr><td colspan="4" style="text-align:center;color:var(--text-secondary)">Loading…</td></tr>
             </tbody>
           </table>
-          <div style="margin-top:var(--space-4);padding:var(--space-3);background:var(--critical-dim);border:1px solid rgba(239,68,68,.3);border-radius:var(--radius-sm)">
-            <div style="font-size:11px;color:var(--critical);font-weight:600;margin-bottom:4px">Mitigation Required</div>
-            <div style="font-size:11px;color:var(--text-secondary)">Disable LLMNR via GPO → Computer Config → Admin Templates → Network → DNS Client → Turn off multicast name resolution = Enabled</div>
+          <div style="margin-top:var(--space-4);padding:var(--space-3);background:var(--accent-dim);border:1px solid rgba(59,130,246,.3);border-radius:var(--radius-sm)">
+            <div style="font-size:11px;color:var(--text-secondary)">This is raw LLMNR/NBT-NS query traffic (destination is the standard multicast/broadcast group, e.g. 224.0.0.252) - normal on any Windows LAN by itself. A confirmed poisoning attempt (a spoofed unicast reply) shows up on the <a href="04_suricata_ids.html" style="color:var(--accent)">Suricata IDS</a> dashboard via its ET POLICY LLMNR signatures. If GPO-disabling LLMNR is your policy regardless: Computer Config → Admin Templates → Network → DNS Client → Turn off multicast name resolution = Enabled.</div>
           </div>
         </div>
       </div>
@@ -322,12 +321,12 @@ async function loadLlmnr() {
     const rows = await res.json();
     const tbody = document.getElementById('llmnr-body');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary)">No LLMNR/NBT-NS poisoning traffic seen in the last hour.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary)">No LLMNR/NBT-NS query traffic in the last hour.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(r => `<tr style="cursor:pointer" data-id="${r.id}">
       <td class="mono">${(r.timestamp||'').substring(11,19)}</td>
-      <td class="mono">${r.victim||''}</td><td class="mono">${r.poison_ip||''}</td><td>${r.resource||''}</td>
+      <td class="mono">${r.querier||''}</td><td class="mono">${r.destination||''}</td><td>${r.resource||''}</td>
     </tr>`).join('');
     tbody.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click', () => openEventModal(tr.dataset.id)));
   } catch (e) {

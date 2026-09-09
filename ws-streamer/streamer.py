@@ -323,22 +323,19 @@ async def handle_suricata_top_signatures(request):
     return web.json_response(out)
 
 
-def find_llmnr_poisoners(client, window="now-1h", min_distinct_queries=3, size=20):
-    """A single machine legitimately issuing/answering LLMNR/NBT-NS traffic
-    on port 5355/137 is completely normal Windows behavior - that alone
-    isn't poisoning. Real Responder-style poisoning looks like one host
-    claiming to be many DIFFERENT names, so this only flags responder IPs
-    that show up against several distinct queried names in the window."""
-    resp = client.search(index="soc-logs-*", body={
-        "size": 0,
-        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [{"range": {"@timestamp": {"gte": window}}}]}},
-        "aggs": {"responders": {
-            "terms": {"field": "id.resp_h.keyword", "size": size},
-            "aggs": {"distinct_queries": {"cardinality": {"field": "query.keyword"}}},
-        }},
-    })
-    buckets = resp["aggregations"]["responders"]["buckets"]
-    return [b["key"] for b in buckets if b["distinct_queries"]["value"] >= min_distinct_queries]
+# NOTE on LLMNR/NBT-NS "poisoning": an earlier version of this tried to
+# flag it by grouping port 5355/137 traffic by id.resp_h and looking for
+# one IP answering many different names. That was still wrong - Zeek's
+# dns.log record here captures the QUERY going out to the standard
+# LLMNR/NBT-NS multicast/broadcast group (224.0.0.252, ff02::1:3,
+# 192.168.x.255), not a spoofed unicast reply from an attacker, so
+# id.resp_h is almost always that same multicast/broadcast address for
+# every legitimate machine on the LAN - it can never distinguish a real
+# Responder-style attack from ordinary Windows name-resolution fallback.
+# Detecting an actual spoofed answer needs packet-content inspection,
+# which is exactly what Suricata's ET POLICY LLMNR signatures already do
+# (see the Suricata IDS dashboard) - don't reinvent it here from
+# connection metadata. This panel is intentionally just query volume.
 
 
 async def handle_zeek_summary(request):
@@ -351,7 +348,7 @@ async def handle_zeek_summary(request):
 
     connections_1h = count(ZEEK_CONN_FILTER)
     notices_1h = count(ZEEK_NOTICE_FILTER)
-    llmnr_1h = len(find_llmnr_poisoners(client))
+    llmnr_1h = count(ZEEK_LLMNR_FILTER)
 
     dns_resp = client.search(index="soc-logs-*", body={
         "size": 0,
@@ -433,19 +430,14 @@ async def handle_zeek_dns_anomalies(request):
 
 
 async def handle_zeek_llmnr(request):
-    """Only lists traffic to/from responder IPs that already tripped the
-    "answering many different names" heuristic - plain LLMNR/NBT-NS
-    protocol chatter with no such pattern is real, ordinary Windows
-    behavior and is deliberately left out, not swept in as an "attack"."""
+    """Real LLMNR/NBT-NS query volume - who queried what, and which
+    multicast/broadcast group it went to. Deliberately NOT labeled as
+    poisoning (see the NOTE above handle_zeek_summary) - genuine
+    spoofed-response detection belongs to Suricata's ET POLICY LLMNR
+    signatures, not this endpoint."""
     client = get_os_client()
-    poisoner_ips = find_llmnr_poisoners(client)
-    if not poisoner_ips:
-        return web.json_response([])
     resp = client.search(index="soc-logs-*", body={
-        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [
-            {"range": {"@timestamp": {"gte": "now-1h"}}},
-            {"terms": {"id.resp_h.keyword": poisoner_ips}},
-        ]}},
+        "query": {"bool": {"filter": ZEEK_LLMNR_FILTER + [{"range": {"@timestamp": {"gte": "now-1h"}}}]}},
         "sort": [{"@timestamp": {"order": "desc"}}],
         "size": 10,
     })
@@ -454,7 +446,7 @@ async def handle_zeek_llmnr(request):
         s = h["_source"]
         out.append({
             "id": h["_id"], "timestamp": s.get("@timestamp"),
-            "victim": s.get("id.orig_h"), "poison_ip": s.get("id.resp_h"),
+            "querier": s.get("id.orig_h"), "destination": s.get("id.resp_h"),
             "resource": s.get("query", ""),
         })
     return web.json_response(out)
