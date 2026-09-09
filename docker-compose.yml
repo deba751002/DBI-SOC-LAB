@@ -503,7 +503,7 @@ services:
       # Fixes a known upstream IRIS bug (gen_random_uuid() missing) - only
       # takes effect on a genuinely fresh dfir-iris-db volume, see the SQL
       # file's own comment.
-      - ./config/dfir-iris/init-pgcrypto.sql:/docker-entrypoint-initdb.d/init-pgcrypto.sql:ro
+      - ./config/dfir-iris/00-init-pgcrypto.sql:/docker-entrypoint-initdb.d/00-init-pgcrypto.sql:ro
     networks:
       soc-net: { ipv4_address: 172.20.0.61 }
     logging: *logging

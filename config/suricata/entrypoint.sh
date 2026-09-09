@@ -18,6 +18,11 @@ CONFIG_RENDERED="/tmp/suricata-rendered.yaml"
 SURICATA_HOME_NET="${SURICATA_HOME_NET:-[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]}" \
     envsubst '${SURICATA_HOME_NET}' < "$CONFIG_SRC" > "$CONFIG_RENDERED"
 
+# A prior crashed run can leave this behind; Suricata's --pidfile check
+# aborts on its mere existence rather than checking if the pid is still
+# alive, which turns one crash into a permanent restart loop.
+rm -f /var/run/suricata.pid
+
 if [ "$IPS_MODE" = "true" ]; then
     echo "[entrypoint] IPS mode enabled — redirecting traffic through NFQUEUE 0"
     echo "[entrypoint] --queue-bypass is set: if Suricata stops, traffic fails OPEN (passes"
