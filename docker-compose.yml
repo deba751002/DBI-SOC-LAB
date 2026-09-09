@@ -868,7 +868,18 @@ services:
       # or wazuh-dashboard (both would duplicate OpenSearch/Dashboards, which
       # this lab already runs on the same ports 9200/5601).
       - wazuh-alerts:/var/ossec/logs/alerts
-      - ./config/wazuh/shared-agent.conf:/var/ossec/etc/shared/default/agent.conf:ro
+      # NOT bind-mounted directly under /var/ossec/etc/ anymore - the
+      # manager's own cont-init.d/0-wazuh-init script treats ANY mount
+      # found under that prefix (including a single file several levels
+      # deep, like .../etc/shared/default/agent.conf) as "etc is already
+      # externally managed" and skips provisioning ossec.conf entirely,
+      # which broke every wazuh binary ("Error reading XML file
+      # 'etc/ossec.conf'") including the manager's own startup. Deploy
+      # this file with, after first boot:
+      #   docker cp config/wazuh/shared-agent.conf soc-wazuh-manager:/var/ossec/etc/shared/default/agent.conf
+      #   docker exec soc-wazuh-manager /var/ossec/bin/wazuh-control restart
+      # It only pushes shared group policy to agents, not required for
+      # basic enrollment/log ingestion.
     networks:
       soc-net: { ipv4_address: 172.20.0.130 }
     logging: *logging
