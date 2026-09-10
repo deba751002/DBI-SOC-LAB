@@ -14,6 +14,7 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
   <style>
     .agent-card {
       background: var(--bg-card);
@@ -149,6 +150,7 @@
     <div class="topbar-title"><span class="page-icon">🤖</span> AI Agents (CrewAI + Ollama)</div>
     <span class="topbar-meta">CrewAI · llama3.2:3b · FastAPI :8500</span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="#" id="api-docs-link" target="_blank" class="btn btn-ghost btn-sm">API Docs ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>

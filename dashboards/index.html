@@ -14,6 +14,7 @@
   })();
 </script>
 <link rel="stylesheet" href="soc-theme.css">
+<script src="status-strip.js"></script>
 <style>
   body { background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary); margin:0; transition:background-color .15s ease, color .15s ease; }
   .theme-toggle {
@@ -70,8 +71,7 @@
 <header class="portal-header">
   <div class="portal-logo">DBI <span>SOC</span></div>
   <div class="portal-meta">
-    <span class="status-dot green"></span>
-    <span>21 services running</span>
+    <div id="global-status-strip"></div>
     <span class="world-clocks" id="world-clocks"></span>
     <span class="portal-clock" id="clock">--:--:-- UTC</span>
     <button class="theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>

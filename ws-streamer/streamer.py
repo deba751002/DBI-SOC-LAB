@@ -34,6 +34,7 @@ IRIS_URL = os.getenv("IRIS_URL", "https://dfir-iris:443")
 IRIS_API_KEY = os.getenv("IRIS_API_KEY", "")
 MISP_URL = os.getenv("MISP_URL", "https://misp:443")
 MISP_KEY = os.getenv("MISP_KEY", "")
+CALDERA_URL = os.getenv("CALDERA_URL_INTERNAL", "http://caldera:8888")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -741,6 +742,65 @@ async def handle_misp_feeds(request):
         return web.json_response({"error": str(e), "feeds": []}, status=502)
 
 
+# ── Unified services status strip - one endpoint the shared
+# status-strip.js include on every dashboard polls, so "is X actually
+# live" is answered the same way everywhere instead of N different ways.
+def _recent_log_types(client, window="now-5m"):
+    """Which log_type values have had at least one document in the
+    window - the cheapest real signal that a sensor is actively shipping
+    data (not just that its container is up)."""
+    try:
+        resp = client.search(index="soc-logs-*", body={
+            "size": 0,
+            "query": {"range": {"@timestamp": {"gte": window}}},
+            "aggs": {"types": {"terms": {"field": "log_type.keyword", "size": 20}}},
+        })
+        return {b["key"] for b in resp["aggregations"]["types"]["buckets"]}
+    except Exception:
+        return set()
+
+
+async def _http_ping(session, url, method="get", **kwargs):
+    try:
+        async with session.request(method, url, ssl=False, timeout=ClientTimeout(total=4), **kwargs) as resp:
+            return resp.status < 500
+    except Exception:
+        return False
+
+
+async def handle_services_status(request):
+    client = get_os_client()
+    recent_types = _recent_log_types(client)
+
+    async with ClientSession() as session:
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok = await asyncio.gather(
+            _http_ping(session, f"{MISP_URL}/users/login"),
+            _http_ping(session, f"{IRIS_URL}/"),
+            _http_ping(session, f"{CREWAI_URL}/health"),
+            _http_ping(session, f"{CALDERA_URL}/"),
+            _http_ping(session, f"{OLLAMA_URL}/api/tags"),
+        )
+
+    try:
+        os_health = client.cluster.health()
+        os_ok = os_health.get("status") in ("green", "yellow")
+    except Exception:
+        os_ok = False
+
+    services = [
+        {"key": "opensearch", "name": "OpenSearch", "online": os_ok},
+        {"key": "suricata", "name": "Suricata", "online": "suricata" in recent_types},
+        {"key": "zeek", "name": "Zeek", "online": "zeek" in recent_types},
+        {"key": "wazuh", "name": "Wazuh", "online": "wazuh" in recent_types},
+        {"key": "misp", "name": "MISP", "online": misp_ok},
+        {"key": "iris", "name": "DFIR-IRIS", "online": iris_ok},
+        {"key": "ai_agents", "name": "AI Agents", "online": ai_ok},
+        {"key": "ollama", "name": "Ollama", "online": ollama_ok},
+        {"key": "caldera", "name": "Caldera", "online": caldera_ok},
+    ]
+    return web.json_response({"services": services})
+
+
 async def handle_event_detail(request):
     """Fetch one full document by its OpenSearch _id, for click-to-drilldown."""
     doc_id = request.match_info["id"]
@@ -779,6 +839,7 @@ async def start_http_app():
     app.router.add_get("/api/misp/search", handle_misp_search)
     app.router.add_get("/api/misp/events", handle_misp_events)
     app.router.add_get("/api/misp/feeds", handle_misp_feeds)
+    app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
     await runner.setup()
