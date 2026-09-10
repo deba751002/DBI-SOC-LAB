@@ -829,6 +829,8 @@ services:
       - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
       - WS_PORT=8765
       - WS_HTTP_PORT=8766
+      - IRIS_URL=https://dfir-iris:443
+      - IRIS_API_KEY=${IRIS_API_KEY:-}
     networks:
       soc-net: { ipv4_address: 172.20.0.110 }
     logging: *logging

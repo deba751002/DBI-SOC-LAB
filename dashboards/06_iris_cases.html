@@ -98,162 +98,43 @@
     <header class="topbar">
       <span class="topbar-title">DFIR-IRIS 2.4 — Case Management</span>
       <div class="topbar-meta">
-        <span class="status-dot yellow"></span> 2 active cases
+        <span class="status-dot yellow" id="topbar-dot"></span> <span id="topbar-text">loading…</span>
       </div>
     </header>
 
     <main class="content">
 
       <div class="kpi-row">
-        <div class="kpi-card critical"><div class="kpi-label">Open Cases</div><div class="kpi-value">2</div><div class="kpi-sub">Escalated</div></div>
-        <div class="kpi-card high"><div class="kpi-label">In Progress</div><div class="kpi-value">1</div><div class="kpi-sub">Analyst assigned</div></div>
-        <div class="kpi-card"><div class="kpi-label">Closed (30d)</div><div class="kpi-value">14</div><div class="kpi-sub">Avg MTTR: 4.2h</div></div>
-        <div class="kpi-card"><div class="kpi-label">IOCs Tracked</div><div class="kpi-value">47</div><div class="kpi-sub">Across all cases</div></div>
+        <div class="kpi-card critical"><div class="kpi-label">Open Cases</div><div class="kpi-value" id="kpi-open">—</div><div class="kpi-sub">No close date set</div></div>
+        <div class="kpi-card high"><div class="kpi-label">Total Cases</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">All time</div></div>
+        <div class="kpi-card"><div class="kpi-label">Closed (30d)</div><div class="kpi-value" id="kpi-closed">—</div><div class="kpi-sub">Recently resolved</div></div>
+        <div class="kpi-card"><div class="kpi-label">IOCs Tracked</div><div class="kpi-value" id="kpi-iocs">—</div><div class="kpi-sub">Across all cases</div></div>
       </div>
 
       <!-- Case Cards -->
-      <div class="grid-2">
-
-        <div class="case-card open">
-          <div class="flex items-center gap-3">
-            <span class="badge badge-critical">CRITICAL</span>
-            <span style="color:var(--text-primary);font-weight:600">INC-2026-001 · APT-29 Intrusion</span>
-          </div>
-          <div style="color:var(--text-muted);font-size:13px;margin:8px 0">Opened: 2026-04-25 02:14 UTC · Analyst: jsmith</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <span class="technique-tag">T1566.001</span>
-            <span class="technique-tag">T1059.001</span>
-            <span class="technique-tag">T1003.001</span>
-            <span class="technique-tag">T1021.002</span>
-            <span class="technique-tag">T1041</span>
-          </div>
-          <div style="margin-top:12px;color:var(--text-secondary);font-size:13px">
-            13-step kill chain. WKSTN-FINANCE-01 compromised. Lateral movement to SRV-HR-02 and DC-CORP-01. 4.2 GB exfiltrated.
-          </div>
-        </div>
-
-        <div class="case-card open">
-          <div class="flex items-center gap-3">
-            <span class="badge badge-high">HIGH</span>
-            <span style="color:var(--text-primary);font-weight:600">INC-2026-002 · Brute Force Campaign</span>
-          </div>
-          <div style="color:var(--text-muted);font-size:13px;margin:8px 0">Opened: 2026-04-25 03:41 UTC · Analyst: alee</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <span class="technique-tag">T1110.001</span>
-            <span class="technique-tag">T1078</span>
-          </div>
-          <div style="margin-top:12px;color:var(--text-secondary);font-size:13px">
-            Password spray from 10.0.99.15 against 38 accounts. 3 accounts locked out. Origin: internal VLAN — compromised host suspected.
-          </div>
-        </div>
-
-        <div class="case-card in-progress">
-          <div class="flex items-center gap-3">
-            <span class="badge badge-medium">MEDIUM</span>
-            <span style="color:var(--text-primary);font-weight:600">INC-2026-003 · Insider Threat</span>
-          </div>
-          <div style="color:var(--text-muted);font-size:13px;margin:8px 0">Opened: 2026-04-24 18:05 UTC · Analyst: bwilliams</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <span class="technique-tag">T1039</span>
-            <span class="technique-tag">T1560.001</span>
-            <span class="technique-tag">T1567.002</span>
-          </div>
-          <div style="margin-top:12px;color:var(--text-secondary);font-size:13px">
-            User rchen accessed 847 legal files, created 7z archive, uploaded 2.3 GB to Dropbox outside hours. HR engaged. Evidence preserved.
-          </div>
-        </div>
-
-        <div class="case-card closed">
-          <div class="flex items-center gap-3">
-            <span class="badge badge-low">CLOSED</span>
-            <span style="color:var(--text-primary);font-weight:600">INC-2026-004 · Phishing Wave</span>
-          </div>
-          <div style="color:var(--text-muted);font-size:13px;margin:8px 0">Closed: 2026-04-23 14:30 UTC · MTTR: 3.5h</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <span class="technique-tag">T1566.001</span>
-            <span class="technique-tag">T1053.005</span>
-            <span class="technique-tag">T1547.001</span>
-          </div>
-          <div style="margin-top:12px;color:var(--text-secondary);font-size:13px">
-            12 users received malicious macro. 2 executed. Hosts reimaged. YARA rule deployed. Email gateway block updated.
-          </div>
-        </div>
-
+      <div class="grid-2" id="case-cards">
+        <div class="case-card"><span style="color:var(--text-secondary);font-size:13px">Loading cases from DFIR-IRIS…</span></div>
       </div>
 
-      <!-- INC-2026-001 Attack Timeline -->
-      <div class="card" style="margin-top:var(--space-5)">
+      <!-- Selected case detail -->
+      <div class="card" style="margin-top:var(--space-5)" id="case-detail-card" hidden>
         <div class="card-header">
-          <span class="card-title">🕐 INC-2026-001 Attack Timeline</span>
-          <span class="badge badge-critical">IN PROGRESS</span>
+          <span class="card-title" id="case-detail-title">🕐 Case Timeline</span>
         </div>
         <div class="card-body">
-          <div class="timeline">
-            <div class="tl-item">
-              <div class="tl-dot critical"></div>
-              <div class="tl-content">
-                <div class="tl-time">02:14 UTC</div>
-                <div class="tl-title">Spearphishing Email Delivered</div>
-                <div class="tl-desc">Malicious Office macro attachment to finance@corp.local from spoofed HR domain · <span class="technique-tag">T1566.001</span></div>
-              </div>
-            </div>
-            <div class="tl-item">
-              <div class="tl-dot high"></div>
-              <div class="tl-content">
-                <div class="tl-time">02:19 UTC</div>
-                <div class="tl-title">PowerShell Payload Executed</div>
-                <div class="tl-desc">Encoded IEX download cradle — staged C2 implant from 185.220.101.45 · <span class="technique-tag">T1059.001</span></div>
-              </div>
-            </div>
-            <div class="tl-item">
-              <div class="tl-dot high"></div>
-              <div class="tl-content">
-                <div class="tl-time">02:24 UTC</div>
-                <div class="tl-title">Persistence Established</div>
-                <div class="tl-desc">Scheduled task + registry run key created · <span class="technique-tag">T1053.005</span> <span class="technique-tag">T1547.001</span></div>
-              </div>
-            </div>
-            <div class="tl-item">
-              <div class="tl-dot critical"></div>
-              <div class="tl-content">
-                <div class="tl-time">02:31 UTC</div>
-                <div class="tl-title">LSASS Dumped</div>
-                <div class="tl-desc">Credential extraction via rundll32 · Domain credentials obtained · <span class="technique-tag">T1003.001</span></div>
-              </div>
-            </div>
-            <div class="tl-item">
-              <div class="tl-dot critical"></div>
-              <div class="tl-content">
-                <div class="tl-time">02:47 UTC</div>
-                <div class="tl-title">Lateral Movement to DC</div>
-                <div class="tl-desc">Pass-the-hash to DC-CORP-01 and SRV-HR-02 via SMB · <span class="technique-tag">T1550.002</span> <span class="technique-tag">T1021.002</span></div>
-              </div>
-            </div>
-            <div class="tl-item">
-              <div class="tl-dot critical"></div>
-              <div class="tl-content">
-                <div class="tl-time">03:12 UTC</div>
-                <div class="tl-title">Data Exfiltration</div>
-                <div class="tl-desc">4.2 GB over HTTPS to Tor exit 185.220.101.45 · DNS tunnel C2 channel · <span class="technique-tag">T1041</span> <span class="technique-tag">T1071.004</span></div>
-              </div>
-            </div>
+          <div class="timeline" id="case-timeline">
+            <span style="color:var(--text-secondary);font-size:13px">Select a case above to view its timeline.</span>
           </div>
         </div>
       </div>
 
       <!-- IOC Tracker -->
-      <div class="card" style="margin-top:var(--space-5)">
-        <div class="card-header"><span class="card-title">🔎 IOC Tracker — INC-2026-001</span></div>
+      <div class="card" style="margin-top:var(--space-5)" id="ioc-card" hidden>
+        <div class="card-header"><span class="card-title" id="ioc-card-title">🔎 IOC Tracker</span></div>
         <div class="card-body">
           <table class="data-table">
-            <thead><tr><th>IOC</th><th>Type</th><th>Confidence</th><th>MISP</th><th>Added</th></tr></thead>
-            <tbody>
-              <tr><td class="mono">185.220.101.45</td><td>IP</td><td><span class="badge badge-critical">HIGH</span></td><td><span class="badge badge-low">Synced</span></td><td class="mono">02:20</td></tr>
-              <tr><td class="mono">c2.malicious-apt.net</td><td>Domain</td><td><span class="badge badge-critical">HIGH</span></td><td><span class="badge badge-low">Synced</span></td><td class="mono">03:15</td></tr>
-              <tr><td class="mono">a1b2c3d4e5f6...sha256</td><td>File Hash</td><td><span class="badge badge-high">MED</span></td><td><span class="badge badge-medium">Pending</span></td><td class="mono">02:22</td></tr>
-              <tr><td class="mono">CORP\jsmith (compromised)</td><td>Account</td><td><span class="badge badge-critical">HIGH</span></td><td>—</td><td class="mono">02:35</td></tr>
-              <tr><td class="mono">45.132.227.89</td><td>IP</td><td><span class="badge badge-high">MED</span></td><td><span class="badge badge-low">Synced</span></td><td class="mono">03:45</td></tr>
-            </tbody>
+            <thead><tr><th>IOC</th><th>Type</th><th>TLP</th><th>Description</th></tr></thead>
+            <tbody id="ioc-table-body"></tbody>
           </table>
         </div>
       </div>
@@ -272,5 +153,124 @@
     </main>
   </div>
 </div>
+
+<script>
+// Everything here is fetched from ws-streamer's HTTP API, which proxies
+// real calls to DFIR-IRIS's own REST API (only reachable by hostname on
+// the docker network, with a Bearer API key that stays server-side).
+// The case list, timeline, and IOCs shown are whatever actually exists in
+// IRIS right now - a fresh lab install may genuinely only have its one
+// built-in demo case with no IOCs/timeline yet, which is not a bug.
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function sevInfo(severity_id) {
+  const map = {1: ['low','Low'], 2: ['medium','Medium'], 3: ['high','High'], 4: ['critical','Critical']};
+  return map[severity_id] || ['neutral', 'Unclassified'];
+}
+
+async function loadCases() {
+  try {
+    const res = await fetch(`${API_BASE}/api/iris/cases`);
+    const d = await res.json();
+    if (d.error) {
+      document.getElementById('topbar-text').textContent = d.error;
+      document.getElementById('case-cards').innerHTML =
+        `<div class="case-card"><span style="color:var(--critical);font-size:13px">${d.error}</span></div>`;
+      return;
+    }
+    const cases = d.cases || [];
+    const open = cases.filter(c => !c.close_date);
+    const now = new Date();
+    const closedRecently = cases.filter(c => c.close_date &&
+      (now - new Date(c.close_date)) / 86400000 <= 30);
+
+    document.getElementById('kpi-open').textContent = open.length;
+    document.getElementById('kpi-total').textContent = cases.length;
+    document.getElementById('kpi-closed').textContent = closedRecently.length;
+    document.getElementById('topbar-dot').className = 'status-dot ' + (open.length ? 'yellow' : 'green');
+    document.getElementById('topbar-text').textContent = `${open.length} open case${open.length===1?'':'s'} · ${cases.length} total`;
+
+    const grid = document.getElementById('case-cards');
+    if (!cases.length) {
+      grid.innerHTML = '<div class="case-card"><span style="color:var(--text-secondary);font-size:13px">No cases in DFIR-IRIS yet.</span></div>';
+    } else {
+      grid.innerHTML = cases.map(c => {
+        const [cls, label] = sevInfo(c.severity_id);
+        const status = c.close_date ? 'CLOSED' : (c.status_name || 'OPEN').toUpperCase();
+        return `<div class="case-card" style="cursor:pointer" data-cid="${c.case_id}">
+          <div class="flex items-center gap-3">
+            <span class="badge badge-${cls}">${label.toUpperCase()}</span>
+            <span style="color:var(--text-primary);font-weight:600">#${c.case_id} · ${c.name}</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:13px;margin:8px 0">
+            Opened: ${c.open_date || '?'} · Owner: ${(c.owner && c.owner.user_name) || 'unassigned'} · Status: ${status}
+          </div>
+          <div style="margin-top:12px;color:var(--text-secondary);font-size:13px">${c.description || '(no description)'}</div>
+        </div>`;
+      }).join('');
+      grid.querySelectorAll('.case-card[data-cid]').forEach(el =>
+        el.addEventListener('click', () => loadCaseDetail(el.dataset.cid, el.querySelector('span:nth-child(2)').textContent)));
+    }
+
+    // Total IOCs across all cases (small case counts in a lab - fine to
+    // fetch each case's IOC list in parallel rather than one at a time).
+    const iocCounts = await Promise.all(cases.map(async c => {
+      try {
+        const r = await fetch(`${API_BASE}/api/iris/case/${c.case_id}/iocs`);
+        const j = await r.json();
+        return (j.iocs || []).length;
+      } catch (e) { return 0; }
+    }));
+    document.getElementById('kpi-iocs').textContent = iocCounts.reduce((a,b) => a+b, 0);
+  } catch (e) {
+    document.getElementById('topbar-text').textContent = 'Could not reach ws-streamer API.';
+  }
+}
+
+async function loadCaseDetail(cid, title) {
+  document.getElementById('case-detail-card').hidden = false;
+  document.getElementById('ioc-card').hidden = false;
+  document.getElementById('case-detail-title').textContent = `🕐 ${title} — Timeline`;
+  document.getElementById('ioc-card-title').textContent = `🔎 IOC Tracker — ${title}`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/iris/case/${cid}/timeline`);
+    const d = await res.json();
+    const events = d.timeline || [];
+    const tl = document.getElementById('case-timeline');
+    tl.innerHTML = events.length ? events.map(e => `<div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-time">${e.event_date || e.start_date || ''}</div>
+          <div class="tl-title">${e.title || e.event_title || '(untitled event)'}</div>
+          <div class="tl-desc">${e.content || e.event_content || ''}</div>
+        </div>
+      </div>`).join('')
+      : '<span style="color:var(--text-secondary);font-size:13px">No timeline events recorded for this case yet.</span>';
+  } catch (e) {
+    document.getElementById('case-timeline').innerHTML = '<span style="color:var(--critical)">Could not load timeline.</span>';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/iris/case/${cid}/iocs`);
+    const d = await res.json();
+    const iocs = d.iocs || [];
+    const tbody = document.getElementById('ioc-table-body');
+    tbody.innerHTML = iocs.length ? iocs.map(i => `<tr>
+        <td class="mono">${i.ioc_value || ''}</td>
+        <td>${(i.ioc_type && i.ioc_type.type_name) || i.ioc_type_id || ''}</td>
+        <td><span class="badge badge-neutral">${(i.ioc_tlp && i.ioc_tlp.tlp_name) || 'n/a'}</span></td>
+        <td>${i.ioc_description || ''}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary)">No IOCs recorded for this case yet.</td></tr>';
+  } catch (e) {
+    document.getElementById('ioc-table-body').innerHTML =
+      '<tr><td colspan="4" style="text-align:center;color:var(--critical)">Could not load IOCs.</td></tr>';
+  }
+}
+
+loadCases();
+setInterval(loadCases, 20000);
+</script>
 </body>
 </html>

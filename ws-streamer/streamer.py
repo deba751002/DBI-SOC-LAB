@@ -30,6 +30,8 @@ HTTP_PORT = int(os.getenv("WS_HTTP_PORT", "8766"))
 POLL_SECS = int(os.getenv("POLL_INTERVAL_SECS", "5"))
 CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai-soc:8500")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
+IRIS_URL = os.getenv("IRIS_URL", "https://dfir-iris:443")
+IRIS_API_KEY = os.getenv("IRIS_API_KEY", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -628,6 +630,50 @@ async def handle_ai_run(request):
         return web.json_response({"error": f"crewai-soc unreachable: {e}"}, status=502)
 
 
+# ── DFIR-IRIS proxy - same rationale: IRIS is only reachable by hostname
+# on the docker network (https://dfir-iris:443, self-signed cert), and its
+# API key stays server-side rather than shipping to every browser.
+def _iris_headers():
+    return {"Authorization": f"Bearer {IRIS_API_KEY}"}
+
+
+async def handle_iris_cases(request):
+    if not IRIS_API_KEY:
+        return web.json_response({"error": "IRIS_API_KEY not configured", "cases": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{IRIS_URL}/manage/cases/filter", headers=_iris_headers(), ssl=False) as resp:
+                data = await resp.json()
+                cases = data.get("data", {}).get("cases", [])
+                return web.json_response({"cases": cases})
+    except Exception as e:
+        return web.json_response({"error": str(e), "cases": []}, status=502)
+
+
+async def handle_iris_case_iocs(request):
+    cid = request.match_info["cid"]
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{IRIS_URL}/case/ioc/list", params={"cid": cid},
+                                    headers=_iris_headers(), ssl=False) as resp:
+                data = await resp.json()
+                return web.json_response({"iocs": data.get("data", {}).get("ioc", [])})
+    except Exception as e:
+        return web.json_response({"error": str(e), "iocs": []}, status=502)
+
+
+async def handle_iris_case_timeline(request):
+    cid = request.match_info["cid"]
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{IRIS_URL}/case/timeline/events/list", params={"cid": cid},
+                                    headers=_iris_headers(), ssl=False) as resp:
+                data = await resp.json()
+                return web.json_response({"timeline": data.get("data", {}).get("timeline", [])})
+    except Exception as e:
+        return web.json_response({"error": str(e), "timeline": []}, status=502)
+
+
 async def handle_event_detail(request):
     """Fetch one full document by its OpenSearch _id, for click-to-drilldown."""
     doc_id = request.match_info["id"]
@@ -660,6 +706,9 @@ async def start_http_app():
     app.router.add_get("/api/ai/jobs", handle_ai_jobs)
     app.router.add_get("/api/ai/jobs/{id}", handle_ai_job_detail)
     app.router.add_post("/api/ai/run", handle_ai_run)
+    app.router.add_get("/api/iris/cases", handle_iris_cases)
+    app.router.add_get("/api/iris/case/{cid}/iocs", handle_iris_case_iocs)
+    app.router.add_get("/api/iris/case/{cid}/timeline", handle_iris_case_timeline)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
     await runner.setup()
