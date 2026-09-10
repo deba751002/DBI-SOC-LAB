@@ -149,7 +149,7 @@
     <div class="topbar-title"><span class="page-icon">🤖</span> AI Agents (CrewAI + Ollama)</div>
     <span class="topbar-meta">CrewAI · llama3.2:3b · FastAPI :8500</span>
     <div class="topbar-right">
-      <a href="http://localhost:8500/docs" target="_blank" class="btn btn-ghost btn-sm">API Docs ↗</a>
+      <a href="#" id="api-docs-link" target="_blank" class="btn btn-ghost btn-sm">API Docs ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
   </header>
@@ -159,23 +159,23 @@
     <div class="grid-4 mb-4">
       <div class="kpi-card low">
         <div class="kpi-label">Agents Online</div>
-        <div class="kpi-value">4</div>
-        <div class="kpi-sub">all healthy</div>
+        <div class="kpi-value" id="kpi-agents-online">—</div>
+        <div class="kpi-sub" id="kpi-agents-sub">checking…</div>
       </div>
       <div class="kpi-card info">
         <div class="kpi-label">Jobs Today</div>
-        <div class="kpi-value">7</div>
-        <div class="kpi-sub">completed</div>
+        <div class="kpi-value" id="kpi-jobs-today">—</div>
+        <div class="kpi-sub">across all missions</div>
       </div>
       <div class="kpi-card medium">
         <div class="kpi-label">Ollama Model</div>
-        <div class="kpi-value" style="font-size:16px;margin-top:4px">llama3.2</div>
-        <div class="kpi-sub">3B · local inference</div>
+        <div class="kpi-value" id="kpi-ollama-model" style="font-size:16px;margin-top:4px">—</div>
+        <div class="kpi-sub">local inference</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Avg Response</div>
-        <div class="kpi-value">42s</div>
-        <div class="kpi-sub">per analysis</div>
+        <div class="kpi-value" id="kpi-avg-response">—</div>
+        <div class="kpi-sub">completed missions today</div>
       </div>
     </div>
 
@@ -190,10 +190,7 @@
           <span class="tool-tag">OpenSearch</span>
           <span class="tool-tag">MISP</span>
         </div>
-        <div style="margin-top:auto">
-          <div class="progress-bar"><div class="progress-fill low" style="width:85%"></div></div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Confidence: 85%</div>
-        </div>
+        <div style="margin-top:auto;font-size:10px;color:var(--text-muted)" id="agent-status-threat_analyst">Idle</div>
       </div>
 
       <div class="agent-card active">
@@ -207,10 +204,7 @@
           <span class="tool-tag">Velociraptor</span>
           <span class="tool-tag">MISP</span>
         </div>
-        <div style="margin-top:auto">
-          <div class="progress-bar"><div class="progress-fill low" style="width:92%"></div></div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Confidence: 92%</div>
-        </div>
+        <div style="margin-top:auto;font-size:10px;color:var(--text-muted)" id="agent-status-incident_responder">Idle</div>
       </div>
 
       <div class="agent-card active">
@@ -223,10 +217,7 @@
           <span class="tool-tag">Velociraptor</span>
           <span class="tool-tag">MISP</span>
         </div>
-        <div style="margin-top:auto">
-          <div class="progress-bar"><div class="progress-fill medium" style="width:71%"></div></div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Confidence: 71%</div>
-        </div>
+        <div style="margin-top:auto;font-size:10px;color:var(--text-muted)" id="agent-status-threat_hunter">Idle</div>
       </div>
 
       <div class="agent-card active">
@@ -238,10 +229,7 @@
           <span class="tool-tag">SigmaGen</span>
           <span class="tool-tag">CoverageGap</span>
         </div>
-        <div style="margin-top:auto">
-          <div class="progress-bar"><div class="progress-fill low" style="width:78%"></div></div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Confidence: 78%</div>
-        </div>
+        <div style="margin-top:auto;font-size:10px;color:var(--text-muted)" id="agent-status-detection_engineer">Idle</div>
       </div>
     </div>
 
@@ -251,13 +239,19 @@
         <div class="section-header mb-4">
           <div class="section-title">Mission Launcher</div>
         </div>
-        <select class="input mission-select" id="mission-select">
+        <select class="input mission-select" id="mission-select" onchange="onMissionChange()">
           <option value="investigate">investigate_alert — Full SOC investigation</option>
-          <option value="hunt">threat_hunt — Hypothesis-driven hunt</option>
           <option value="triage">triage_incident — Rapid triage</option>
+          <option value="hunt">threat_hunt — Hypothesis-driven hunt</option>
           <option value="gaps">detection_gaps — Coverage gap analysis</option>
-          <option value="report">weekly_report — SOC summary report</option>
         </select>
+        <input class="input mission-select" id="mission-hypothesis" style="display:none"
+               placeholder="Hunt hypothesis (e.g. lateral movement via SMB)"
+               value="Lateral movement via SMB in the last 24h">
+        <div style="font-size:10px;color:var(--text-muted);margin:-8px 0 8px">
+          Runs a real CrewAI mission against local Ollama - this can take 30s to a few minutes,
+          not a canned transcript.
+        </div>
         <button class="btn btn-primary w-full" id="run-btn" onclick="runMission()">▶ Run Mission</button>
         <div class="mission-output mt-4" id="mission-output">
           <span style="color:var(--text-muted)">Select a mission and click Run…</span>
@@ -268,39 +262,10 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">📋 Recent Jobs</span>
-          <span class="badge badge-accent">7 today</span>
+          <span class="badge badge-accent" id="jobs-badge">— today</span>
         </div>
-        <div class="card-body" style="padding-top:var(--space-3)">
-          <div class="job-row">
-            <span class="badge badge-low">DONE</span>
-            <span style="flex:1;font-size:11px">investigate_alert · INC-001 · APT-29 Attribution</span>
-            <span class="text-muted text-xs mono">12:47</span>
-          </div>
-          <div class="job-row">
-            <span class="badge badge-low">DONE</span>
-            <span style="flex:1;font-size:11px">threat_hunt · lateral_movement hypothesis</span>
-            <span class="text-muted text-xs mono">12:31</span>
-          </div>
-          <div class="job-row">
-            <span class="badge badge-low">DONE</span>
-            <span style="flex:1;font-size:11px">detection_gaps · 10 techniques uncovered</span>
-            <span class="text-muted text-xs mono">11:55</span>
-          </div>
-          <div class="job-row">
-            <span class="badge badge-medium">BUSY</span>
-            <span style="flex:1;font-size:11px">triage_incident · LLMNR poisoning event</span>
-            <span class="text-muted text-xs mono">12:49</span>
-          </div>
-          <div class="job-row">
-            <span class="badge badge-low">DONE</span>
-            <span style="flex:1;font-size:11px">investigate_alert · INC-002 · Brute force</span>
-            <span class="text-muted text-xs mono">10:12</span>
-          </div>
-          <div class="job-row">
-            <span class="badge badge-low">DONE</span>
-            <span style="flex:1;font-size:11px">weekly_report · SOC summary generated</span>
-            <span class="text-muted text-xs mono">09:00</span>
-          </div>
+        <div class="card-body" style="padding-top:var(--space-3)" id="jobs-list">
+          <div class="job-row"><span style="font-size:12px;color:var(--text-secondary)">Loading…</span></div>
         </div>
       </div>
     </div>
@@ -309,87 +274,163 @@
 </div>
 
 <script>
-const MISSION_OUTPUTS = {
-  investigate: `[Threat Analyst] Querying OpenSearch for alert INC-001...
-  → Found 47 related events across 3 hosts
-  → MITRE mapping: T1557.001, T1110, T1021.002
+// Everything here talks to ws-streamer's HTTP API, which proxies real
+// calls to crewai-soc (:8500) and ollama (:11434) server-side - both only
+// resolvable by hostname on the docker network, not from a browser.
+// Running a mission genuinely invokes local LLM inference; there is no
+// canned transcript anymore.
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+let pollTimer = null;
+// http://localhost:8500/docs only worked from the machine running the
+// container itself - fixed to whatever host the browser is actually on.
+document.getElementById('api-docs-link').href = `${location.protocol}//${location.hostname}:8500/docs`;
 
-[Incident Responder] Creating IRIS case INC-2026-001...
-  → Case created: id=42, title="APT-29 Suspected Intrusion"
-  → Triggering Velociraptor hunt on WORKSTATION-07
-
-[Threat Hunter] Cross-referencing MISP for IOCs...
-  → 192.168.1.105: MATCHED — APT-29 known C2 infrastructure
-  → Confidence: HIGH
-
-[CONCLUSION] Attributed to APT-29 (Cozy Bear) with 85% confidence.
-  → Recommended: Isolate WORKSTATION-07, rotate credentials,
-    block 192.168.1.105 at perimeter.`,
-
-  hunt: `[Threat Hunter] Loading hypothesis: lateral_movement_via_smb
-  → Querying for EventID 4648, 4624 type=3 cross-host...
-  → Found 14 successful lateral auth events
-  → Source: WORKSTATION-07 | Destinations: 4 unique hosts
-
-[Threat Analyst] Enriching with MISP context...
-  → No direct IOC matches, but TTP pattern matches APT-29
-
-[HUNT RESULT] Hypothesis CONFIRMED.
-  → 4 hosts accessed laterally over 35 minutes
-  → Recommend: Network segmentation review, PtH mitigation`,
-
-  triage: `[Incident Responder] Rapid triage of LLMNR poisoning...
-  → Event type: T1557.001 (LLMNR/NBT-NS Poisoning)
-  → Attacker: 192.168.1.105 | Victims: 5 hosts
-  → Captured hashes: NTLMv2 (crackable offline)
-
-  Severity: CRITICAL
-  Containment: Block attacker IP immediately
-  Next step: Disable LLMNR via GPO (Computer Config → DNS Client)`,
-
-  gaps: `[Detection Engineer] Analysing MITRE ATT&CK coverage...
-  → Covered (14): T1059.001, T1110, T1003.001, T1053.005...
-  → GAP (10): T1055, T1078, T1134, T1490, T1027...
-
-  Generating Sigma rules for top gaps:
-  → T1055 (Process Injection) — rule written ✓
-  → T1078 (Valid Accounts) — rule written ✓
-  → T1134 (Access Token) — rule written ✓`,
-
-  report: `[Weekly SOC Report — Week 17, 2026]
-  ─────────────────────────────────────
-  Total Events: 8,241 | Alerts: 127 | Cases: 4
-  Critical: 3 | High: 8 | Medium: 21
-
-  Top Techniques: T1557.001 (31), T1059.001 (9), T1110 (8)
-  Detections by Source: Zeek (38%), Sysmon (29%), Suricata (18%)
-
-  Incidents: INC-001 (APT-29, closed), INC-002 (BruteForce, open)
-  Recommended Actions: Disable LLMNR, Patch MS17-010, MFA rollout`
-};
-
-function runMission() {
+function onMissionChange() {
   const mission = document.getElementById('mission-select').value;
+  document.getElementById('mission-hypothesis').style.display = mission === 'hunt' ? 'block' : 'none';
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/health`);
+    const d = await res.json();
+    if (d.status === 'healthy') {
+      document.getElementById('kpi-agents-online').textContent = d.agents ?? 4;
+      document.getElementById('kpi-agents-sub').textContent = 'all healthy';
+    } else {
+      document.getElementById('kpi-agents-online').textContent = '0';
+      document.getElementById('kpi-agents-sub').textContent = 'crewai-soc unreachable';
+    }
+  } catch (e) {
+    document.getElementById('kpi-agents-sub').textContent = 'crewai-soc unreachable';
+  }
+}
+
+async function loadOllamaModel() {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/ollama_model`);
+    const d = await res.json();
+    document.getElementById('kpi-ollama-model').textContent = (d.models && d.models[0]) || 'none loaded';
+  } catch (e) {
+    document.getElementById('kpi-ollama-model').textContent = 'unreachable';
+  }
+}
+
+function fmtDuration(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  const sec = Math.round((new Date(endIso) - new Date(startIso)) / 1000);
+  if (sec < 60) return `${sec}s`;
+  return `${Math.floor(sec/60)}m ${sec%60}s`;
+}
+
+async function loadJobs() {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/jobs`);
+    const d = await res.json();
+    const jobs = (d.jobs || []).slice().reverse();
+    const today = new Date().toISOString().substring(0, 10);
+    const todayJobs = jobs.filter(j => (j.queued_at || '').startsWith(today));
+    document.getElementById('kpi-jobs-today').textContent = todayJobs.length;
+    document.getElementById('jobs-badge').textContent = `${todayJobs.length} today`;
+
+    const durations = [];
+    const list = document.getElementById('jobs-list');
+    if (!jobs.length) {
+      list.innerHTML = '<div class="job-row"><span style="font-size:12px;color:var(--text-secondary)">No missions run yet - launch one on the left.</span></div>';
+    } else {
+      list.innerHTML = jobs.slice(0, 15).map(j => {
+        const badge = j.status === 'completed' ? 'badge-low' : j.status === 'failed' ? 'badge-critical' : 'badge-medium';
+        const label = (j.status || 'queued').toUpperCase();
+        const time = (j.queued_at || '').substring(11, 16);
+        return `<div class="job-row"><span class="badge ${badge}">${label}</span>
+          <span style="flex:1;font-size:11px">${j.mission || 'mission'} · ${j.id}</span>
+          <span class="text-muted text-xs mono">${time}</span></div>`;
+      }).join('');
+    }
+
+    // Fetch full detail for a handful of recently completed jobs to compute
+    // a real average response time (their queued/completed timestamps).
+    const completed = jobs.filter(j => j.status === 'completed').slice(0, 8);
+    await Promise.all(completed.map(async j => {
+      try {
+        const r = await fetch(`${API_BASE}/api/ai/jobs/${j.id}`);
+        const detail = await r.json();
+        const d2 = fmtDuration(detail.started_at, detail.completed_at);
+        if (d2) durations.push((new Date(detail.completed_at) - new Date(detail.started_at)) / 1000);
+      } catch (e) { /* skip */ }
+    }));
+    if (durations.length) {
+      const avg = Math.round(durations.reduce((a,b) => a+b, 0) / durations.length);
+      document.getElementById('kpi-avg-response').textContent = avg < 60 ? `${avg}s` : `${Math.floor(avg/60)}m ${avg%60}s`;
+    } else {
+      document.getElementById('kpi-avg-response').textContent = 'N/A';
+    }
+  } catch (e) {
+    document.getElementById('jobs-list').innerHTML =
+      '<div class="job-row"><span style="font-size:12px">Could not reach ws-streamer API.</span></div>';
+  }
+}
+
+async function pollJob(jobId, out, btn) {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/jobs/${jobId}`);
+    const job = await res.json();
+    if (job.status === 'completed') {
+      out.textContent = typeof job.result === 'string' ? job.result : JSON.stringify(job.result, null, 2);
+      btn.disabled = false;
+      btn.textContent = '▶ Run Mission';
+      clearInterval(pollTimer);
+      loadJobs();
+    } else if (job.status === 'failed') {
+      out.innerHTML = `<span style="color:var(--critical)">Mission failed: ${job.error || 'unknown error'}</span>`;
+      btn.disabled = false;
+      btn.textContent = '▶ Run Mission';
+      clearInterval(pollTimer);
+      loadJobs();
+    } else {
+      out.innerHTML = `<span style="color:var(--accent)">Status: ${job.status || 'running'}</span> <span class="thinking-dot"></span><span class="thinking-dot" style="animation-delay:.3s"></span><span class="thinking-dot" style="animation-delay:.6s"></span>`;
+    }
+  } catch (e) { /* keep polling, transient network hiccup */ }
+}
+
+async function runMission() {
+  const mission = document.getElementById('mission-select').value;
+  const hypothesis = document.getElementById('mission-hypothesis').value;
   const out = document.getElementById('mission-output');
   const btn = document.getElementById('run-btn');
   btn.disabled = true;
-  btn.textContent = 'Running…';
-  out.innerHTML = '<span style="color:var(--accent)">Initialising CrewAI crew</span> <span class="thinking-dot"></span><span class="thinking-dot" style="animation-delay:.3s"></span><span class="thinking-dot" style="animation-delay:.6s"></span>';
-  setTimeout(() => {
-    const lines = MISSION_OUTPUTS[mission].split('\n');
-    out.innerHTML = '';
-    lines.forEach((l, i) => {
-      setTimeout(() => {
-        out.innerHTML += `<span style="color:${l.startsWith('[')? 'var(--accent)' : 'var(--text-secondary)'}">${l}\n</span>`;
-        out.scrollTop = out.scrollHeight;
-      }, i * 80);
+  btn.textContent = 'Starting…';
+  out.innerHTML = '<span style="color:var(--accent)">Dispatching to CrewAI</span> <span class="thinking-dot"></span><span class="thinking-dot" style="animation-delay:.3s"></span><span class="thinking-dot" style="animation-delay:.6s"></span>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/run`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ mission, hypothesis }),
     });
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.textContent = '▶ Run Mission';
-    }, lines.length * 80 + 500);
-  }, 1200);
+    const data = await res.json();
+    if (!res.ok || !data.job_id) {
+      out.innerHTML = `<span style="color:var(--critical)">Failed to start mission: ${data.error || 'unknown error'}</span>`;
+      btn.disabled = false; btn.textContent = '▶ Run Mission';
+      return;
+    }
+    btn.textContent = 'Running…';
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollJob(data.job_id, out, btn), 4000);
+    pollJob(data.job_id, out, btn);
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--critical)">Could not reach ws-streamer API.</span>';
+    btn.disabled = false; btn.textContent = '▶ Run Mission';
+  }
 }
+
+function refreshAll() {
+  loadHealth();
+  loadOllamaModel();
+  loadJobs();
+}
+refreshAll();
+setInterval(refreshAll, 15000);
 </script>
 </body>
 </html>

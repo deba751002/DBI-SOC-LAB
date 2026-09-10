@@ -11,7 +11,7 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from opensearchpy import OpenSearch, OpenSearchException
-from aiohttp import web
+from aiohttp import web, ClientSession, ClientTimeout
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +28,8 @@ WS_HOST   = os.getenv("WS_HOST", "0.0.0.0")
 WS_PORT   = int(os.getenv("WS_PORT", "8765"))
 HTTP_PORT = int(os.getenv("WS_HTTP_PORT", "8766"))
 POLL_SECS = int(os.getenv("POLL_INTERVAL_SECS", "5"))
+CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai-soc:8500")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -534,6 +536,98 @@ async def handle_wazuh_agents(request):
     return web.json_response(out)
 
 
+# ── AI Agents (crewai-soc) proxy - same rationale as the OpenSearch
+# proxies above: the dashboard is static HTML with no server of its own,
+# so this process makes the actual calls to crewai-soc/ollama (both only
+# reachable by hostname on the docker network, not from a browser) and
+# hands back JSON.
+MISSION_MAP = {
+    "investigate": ("full_soc", "/analyze/alert"),
+    "triage": ("alert_triage", "/analyze/alert"),
+    "hunt": ("threat_hunt", "/hunt"),
+    "gaps": ("detection_gap", "/detection/gaps"),
+}
+
+
+async def handle_ai_health(request):
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=5)) as session:
+            async with session.get(f"{CREWAI_URL}/health") as resp:
+                data = await resp.json()
+                return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"status": "unreachable", "error": str(e)}, status=502)
+
+
+async def handle_ai_ollama_model(request):
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=5)) as session:
+            async with session.get(f"{OLLAMA_URL}/api/tags") as resp:
+                data = await resp.json()
+                models = [m.get("name") for m in data.get("models", [])]
+                return web.json_response({"models": models})
+    except Exception as e:
+        return web.json_response({"models": [], "error": str(e)}, status=502)
+
+
+async def handle_ai_jobs(request):
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=5)) as session:
+            async with session.get(f"{CREWAI_URL}/jobs") as resp:
+                data = await resp.json()
+                return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"total": 0, "jobs": [], "error": str(e)}, status=502)
+
+
+async def handle_ai_job_detail(request):
+    job_id = request.match_info["id"]
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=5)) as session:
+            async with session.get(f"{CREWAI_URL}/jobs/{job_id}") as resp:
+                data = await resp.json()
+                return web.json_response(data, status=resp.status)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+
+async def handle_ai_run(request):
+    """Dispatches a real CrewAI mission - this actually invokes local Ollama
+    inference (can take 30s-several minutes) and returns a job_id to poll,
+    it does not fabricate a canned transcript."""
+    body = await request.json()
+    mission = body.get("mission")
+    if mission not in MISSION_MAP:
+        return web.json_response({"error": f"unknown mission '{mission}'"}, status=400)
+    crew_mission, path = MISSION_MAP[mission]
+
+    if path == "/hunt":
+        payload = {
+            "hypothesis": body.get("hypothesis") or "Lateral movement via SMB in the last 24h",
+            "target_hosts": [],
+            "time_window_hours": 24,
+            "tactic_focus": "all",
+        }
+    elif path == "/detection/gaps":
+        payload = {"tactic": body.get("tactic", "all"), "recent_incident": ""}
+    else:
+        payload = {
+            "alert_type": body.get("alert_type", "manual_dashboard_trigger"),
+            "source_ip": body.get("source_ip"),
+            "hostname": body.get("hostname"),
+            "severity": body.get("severity", "medium"),
+            "mission": crew_mission,
+        }
+
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(f"{CREWAI_URL}{path}", json=payload) as resp:
+                data = await resp.json()
+                return web.json_response(data, status=resp.status)
+    except Exception as e:
+        return web.json_response({"error": f"crewai-soc unreachable: {e}"}, status=502)
+
+
 async def handle_event_detail(request):
     """Fetch one full document by its OpenSearch _id, for click-to-drilldown."""
     doc_id = request.match_info["id"]
@@ -561,6 +655,11 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/summary", handle_wazuh_summary)
     app.router.add_get("/api/wazuh/feed", handle_wazuh_feed)
     app.router.add_get("/api/wazuh/agents", handle_wazuh_agents)
+    app.router.add_get("/api/ai/health", handle_ai_health)
+    app.router.add_get("/api/ai/ollama_model", handle_ai_ollama_model)
+    app.router.add_get("/api/ai/jobs", handle_ai_jobs)
+    app.router.add_get("/api/ai/jobs/{id}", handle_ai_job_detail)
+    app.router.add_post("/api/ai/run", handle_ai_run)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
     await runner.setup()
