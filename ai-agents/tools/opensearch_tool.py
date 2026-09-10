@@ -12,7 +12,10 @@ import json
 
 class OpenSearchQueryInput(BaseModel):
     query: str = Field(..., description="Lucene/KQL query string, e.g. 'event_type:alert AND severity:high'")
-    index: str = Field(default="soc-logs-*", description="Index pattern to search")
+    index: str = Field(
+        default="soc-logs-*",
+        description="Index pattern to search. This SOC lab has exactly one log index pattern: 'soc-logs-*'. Do not invent other index names.",
+    )
     hours_back: int = Field(default=24, description="Look-back window in hours")
     size: int = Field(default=20, description="Max results to return")
 
@@ -28,6 +31,12 @@ class OpenSearchTool(BaseTool):
 
     def _run(self, query: str, index: str = "soc-logs-*",
              hours_back: int = 24, size: int = 20) -> str:
+        # The LLM occasionally hallucinates a plausible-sounding index name
+        # (e.g. "security_events") instead of the one real pattern this
+        # stack ships data into. Silently correct it rather than 404-ing.
+        if not index.startswith("soc-logs"):
+            index = "soc-logs-*"
+
         host = os.getenv("OPENSEARCH_HOST", "opensearch-node1")
         port = int(os.getenv("OPENSEARCH_PORT", "9200"))
         user = os.getenv("OPENSEARCH_USER", "admin")
