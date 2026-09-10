@@ -873,10 +873,18 @@ def _get_velo_stub():
     global _velo_channel, _velo_stub
     if _velo_stub is not None:
         return _velo_stub
-    from pyvelociraptor import LoadConfig, GetChannel
+    import grpc
+    from pyvelociraptor import LoadConfigFile
     from pyvelociraptor import api_pb2_grpc
-    config = LoadConfig(VELOCIRAPTOR_API_CLIENT_CONFIG)
-    _velo_channel = GetChannel(config)
+    config = LoadConfigFile(VELOCIRAPTOR_API_CLIENT_CONFIG)
+    creds = grpc.ssl_channel_credentials(
+        root_certificates=config["ca_certificate"].encode("utf8"),
+        private_key=config["client_private_key"].encode("utf8"),
+        certificate_chain=config["client_cert"].encode("utf8"),
+    )
+    # api_connection_string in the generated config is host-agnostic
+    # (0.0.0.0:8001) - always dial the real service name on the docker network.
+    _velo_channel = grpc.secure_channel("velociraptor:8001", creds)
     _velo_stub = api_pb2_grpc.APIStub(_velo_channel)
     return _velo_stub
 
