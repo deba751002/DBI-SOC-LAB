@@ -650,6 +650,12 @@ services:
       # rest of this lab uses plain HTTP throughout, so disable that
       # rather than dealing with a self-signed-cert browser warning.
       - DISABLE_SSL_REDIRECT=true
+      # PHP_SESSION_COOKIE_SECURE defaults to true in this image, which
+      # marks the session cookie Secure - browsers refuse to store/return
+      # a Secure cookie over plain HTTP, so the session (and the CSRF
+      # token it carries) never survived a request, tripping MISP's CSRF
+      # protection on every single page load, not just resubmits.
+      - PHP_SESSION_COOKIE_SECURE=false
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
