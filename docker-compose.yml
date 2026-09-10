@@ -885,6 +885,9 @@ services:
       - CALDERA_URL_INTERNAL=http://caldera:8888
       - CALDERA_API_KEY=${CALDERA_API_KEY_RED:-}
       - VELOCIRAPTOR_API_CLIENT_CONFIG=/app/velociraptor_api_client.config.yaml
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_ADMIN_USER=${KEYCLOAK_ADMIN:-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-}
     volumes:
       # Velociraptor's API is gRPC + mTLS, not REST - this is the cert/key
       # bundle from `velociraptor config api_client`, generated once on the

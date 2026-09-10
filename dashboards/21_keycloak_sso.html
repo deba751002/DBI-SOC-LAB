@@ -13,6 +13,7 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +93,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🔐</span> Keycloak — SSO / RBAC</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> Realm: soc-lab · 4 clients registered</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="kc-dot"></span> <span id="kc-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:8180" target="_blank" class="btn btn-ghost btn-sm">Open Keycloak ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -103,28 +105,35 @@
 
     <div class="card mb-4" style="background:rgba(34,197,94,0.08);border:1px solid var(--low)">
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
-        Every dashboard in this stack sits behind this realm once deployed — no page is reachable without
-        authenticating first, and roles below decide who can view vs. take action (restore a file, block an IP).
+        Once dashboards are put behind a realm here, no page is reachable without authenticating first, and
+        roles decide who can view vs. take action (restore a file, block an IP). Right now this shows the
+        server's real current state — no dashboards are actually gated by it yet.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card low"><div class="kpi-label">Registered Users</div><div class="kpi-value">12</div><div class="kpi-sub">across 3 roles</div></div>
-      <div class="kpi-card info"><div class="kpi-label">Active Sessions</div><div class="kpi-value">4</div><div class="kpi-sub">right now</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Failed Logins (24h)</div><div class="kpi-value">3</div><div class="kpi-sub">2 from same IP — watchlist</div></div>
-      <div class="kpi-card medium"><div class="kpi-label">MFA Enrolled</div><div class="kpi-value">75%</div><div class="kpi-sub">9 / 12 users</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Realms</div><div class="kpi-value" id="kpi-realms">0</div><div class="kpi-sub" id="kpi-realms-sub">—</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Users (master)</div><div class="kpi-value" id="kpi-users">0</div><div class="kpi-sub">real accounts</div></div>
+      <div class="kpi-card"><div class="kpi-label">Clients (master)</div><div class="kpi-value" id="kpi-clients">0</div><div class="kpi-sub">registered apps</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Login Events</div><div class="kpi-value" id="kpi-events">0</div><div class="kpi-sub" id="kpi-events-sub">last 50</div></div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🧩 Role -&gt; Dashboard Access</span></div>
+      <div class="card-header"><span class="card-title">🧩 Realms</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Role</th><th>Users</th><th>View Access</th><th>Action Access</th></tr></thead>
-          <tbody>
-            <tr><td><span class="badge badge-critical">Admin</span></td><td>2</td><td>All dashboards</td><td>Restore files, block IPs, run scans, manage secrets</td></tr>
-            <tr><td><span class="badge badge-medium">Analyst</span></td><td>7</td><td>All defensive dashboards</td><td>Create IRIS cases, run hunts, view-only elsewhere</td></tr>
-            <tr><td><span class="badge badge-low">Viewer</span></td><td>3</td><td>SOC Overview, Grafana Metrics only</td><td>None — read-only</td></tr>
-          </tbody>
+          <thead><tr><th>Realm</th><th>Enabled</th><th>Users</th><th>Clients</th></tr></thead>
+          <tbody id="realms-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><span class="card-title">👤 Users — master realm</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Username</th><th>Email</th><th>Enabled</th><th>Created</th></tr></thead>
+          <tbody id="users-body"></tbody>
         </table>
       </div>
     </div>
@@ -133,26 +142,109 @@
       <div class="card-header"><span class="card-title">📜 Recent Login Events</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Time</th><th>User</th><th>Result</th><th>Source IP</th></tr></thead>
-          <tbody>
-            <tr><td class="mono">21:40:12</td><td>a.sharma@dbi360.com</td><td><span class="badge badge-low">Success</span></td><td class="mono">10.0.1.22</td></tr>
-            <tr class="row-suspicious"><td class="mono">21:12:04</td><td>unknown</td><td><span class="badge badge-critical">Failed</span></td><td class="mono">185.220.101.45</td></tr>
-            <tr class="row-suspicious"><td class="mono">21:11:47</td><td>unknown</td><td><span class="badge badge-critical">Failed</span></td><td class="mono">185.220.101.45</td></tr>
-            <tr><td class="mono">20:58:31</td><td>r.iyer@dbi360.com</td><td><span class="badge badge-low">Success</span></td><td class="mono">10.0.1.40</td></tr>
-          </tbody>
+          <thead><tr><th>Time</th><th>User</th><th>Type</th><th>Client</th></tr></thead>
+          <tbody id="events-body"></tbody>
         </table>
+        <div class="velo-empty" id="events-empty" style="display:none;color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center">
+          No login events recorded — event logging is off by default in Keycloak (Realm Settings → Events → enable "Save events").
+        </div>
       </div>
     </div>
 
     <div class="card mb-4">
       <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">platform-hardening</span>
-        profile. Not started yet — <span class="mono">docker compose --profile platform-hardening up -d keycloak</span>,
-        then create the <span class="mono">soc-lab</span> realm and the 3 roles above.
+        Only the default <span class="mono">master</span> realm exists so far — a dedicated <span class="mono">soc-lab</span>
+        realm with per-dashboard clients and Admin/Analyst/Viewer roles hasn't been created yet. This dashboard reflects
+        whatever's really configured, so it'll fill in as that setup happens.
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try { return new Date(Number(ts)).toLocaleString(); } catch (e) { return '—'; }
+}
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'keycloak');
+    const dot = document.getElementById('kc-dot');
+    const txt = document.getElementById('kc-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'Keycloak reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'Keycloak unreachable'; }
+  } catch (e) {}
+}
+
+async function refreshRealms() {
+  try {
+    const res = await fetch(`${API_BASE}/api/keycloak/realms`);
+    const d = await res.json();
+    const realms = d.realms || [];
+    document.getElementById('kpi-realms').textContent = realms.length;
+    document.getElementById('kpi-realms-sub').textContent = realms.map(r => r.realm).join(', ') || '—';
+    const master = realms.find(r => r.realm === 'master') || {};
+    document.getElementById('kpi-users').textContent = master.user_count || 0;
+    document.getElementById('kpi-clients').textContent = master.client_count || 0;
+    document.getElementById('realms-body').innerHTML = realms.map(r => `<tr>
+      <td class="mono">${r.realm}</td>
+      <td><span class="badge ${r.enabled ? 'badge-low' : 'badge-critical'}">${r.enabled ? 'YES' : 'NO'}</span></td>
+      <td>${r.user_count}</td>
+      <td>${r.client_count}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">${d.error || 'No realms found'}</td></tr>`;
+  } catch (e) {}
+}
+
+async function refreshUsers() {
+  try {
+    const res = await fetch(`${API_BASE}/api/keycloak/users?realm=master`);
+    const d = await res.json();
+    const users = d.users || [];
+    document.getElementById('users-body').innerHTML = users.map(u => `<tr>
+      <td>${u.username}</td>
+      <td>${u.email || '—'}</td>
+      <td><span class="badge ${u.enabled ? 'badge-low' : 'badge-critical'}">${u.enabled ? 'YES' : 'NO'}</span></td>
+      <td>${fmtTime(u.created)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No users</td></tr>';
+  } catch (e) {}
+}
+
+async function refreshEvents() {
+  const body = document.getElementById('events-body');
+  const empty = document.getElementById('events-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/keycloak/events?realm=master`);
+    const d = await res.json();
+    const events = d.events || [];
+    document.getElementById('kpi-events').textContent = events.length;
+    if (!events.length) {
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    body.innerHTML = events.map(e => `<tr>
+      <td class="mono">${fmtTime(e.time)}</td>
+      <td>${e.userId || 'unknown'}</td>
+      <td><span class="badge ${(e.type || '').includes('ERROR') ? 'badge-critical' : 'badge-low'}">${e.type || '—'}</span></td>
+      <td>${e.clientId || '—'}</td>
+    </tr>`).join('');
+  } catch (e) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshRealms(), refreshUsers(), refreshEvents()]);
+}
+refreshAll();
+setInterval(refreshAll, 20000);
+</script>
 </body>
 </html>

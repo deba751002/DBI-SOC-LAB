@@ -37,6 +37,9 @@ MISP_KEY = os.getenv("MISP_KEY", "")
 CALDERA_URL = os.getenv("CALDERA_URL_INTERNAL", "http://caldera:8888")
 CALDERA_API_KEY = os.getenv("CALDERA_API_KEY", "")
 VELOCIRAPTOR_API_CLIENT_CONFIG = os.getenv("VELOCIRAPTOR_API_CLIENT_CONFIG", "/app/velociraptor_api_client.config.yaml")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
+KEYCLOAK_ADMIN_USER = os.getenv("KEYCLOAK_ADMIN_USER", "admin")
+KEYCLOAK_ADMIN_PASSWORD = os.getenv("KEYCLOAK_ADMIN_PASSWORD", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -945,6 +948,93 @@ async def handle_velo_query(request):
         return web.json_response({"error": str(e), "rows": []}, status=502)
 
 
+# ── Keycloak proxy - authenticates once with the admin-cli password grant
+# (Keycloak's access tokens are short-lived, ~60s, so we cache and refetch
+# rather than re-authenticate on every dashboard poll).
+_keycloak_token: str | None = None
+_keycloak_token_expiry: float = 0.0
+
+
+async def _keycloak_admin_token(session) -> str:
+    global _keycloak_token, _keycloak_token_expiry
+    now = asyncio.get_event_loop().time()
+    if _keycloak_token and now < _keycloak_token_expiry:
+        return _keycloak_token
+    async with session.post(
+        f"{KEYCLOAK_URL}/realms/master/protocol/openid-connect/token",
+        data={"client_id": "admin-cli", "username": KEYCLOAK_ADMIN_USER,
+              "password": KEYCLOAK_ADMIN_PASSWORD, "grant_type": "password"},
+    ) as resp:
+        data = await resp.json(content_type=None)
+        if "access_token" not in data:
+            raise RuntimeError(data.get("error_description", "Keycloak auth failed"))
+        _keycloak_token = data["access_token"]
+        _keycloak_token_expiry = now + int(data.get("expires_in", 60)) - 10
+        return _keycloak_token
+
+
+async def handle_keycloak_realms(request):
+    if not KEYCLOAK_ADMIN_PASSWORD:
+        return web.json_response({"error": "KEYCLOAK_ADMIN_PASSWORD not configured", "realms": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            token = await _keycloak_admin_token(session)
+            headers = {"Authorization": f"Bearer {token}"}
+            async with session.get(f"{KEYCLOAK_URL}/admin/realms", headers=headers) as resp:
+                realms = await resp.json(content_type=None)
+
+            result = []
+            for r in realms:
+                name = r["realm"]
+                async with session.get(f"{KEYCLOAK_URL}/admin/realms/{name}/users/count", headers=headers) as resp:
+                    user_count = await resp.json(content_type=None)
+                async with session.get(f"{KEYCLOAK_URL}/admin/realms/{name}/clients", headers=headers) as resp:
+                    clients = await resp.json(content_type=None)
+                result.append({
+                    "realm": name, "enabled": r.get("enabled"),
+                    "user_count": user_count, "client_count": len(clients),
+                })
+            return web.json_response({"realms": result})
+    except Exception as e:
+        return web.json_response({"error": str(e), "realms": []}, status=502)
+
+
+async def handle_keycloak_users(request):
+    realm = request.query.get("realm", "master")
+    if not KEYCLOAK_ADMIN_PASSWORD:
+        return web.json_response({"error": "KEYCLOAK_ADMIN_PASSWORD not configured", "users": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            token = await _keycloak_admin_token(session)
+            headers = {"Authorization": f"Bearer {token}"}
+            async with session.get(f"{KEYCLOAK_URL}/admin/realms/{realm}/users", headers=headers) as resp:
+                users = await resp.json(content_type=None)
+                result = [{
+                    "id": u.get("id"), "username": u.get("username"), "email": u.get("email"),
+                    "enabled": u.get("enabled"), "created": u.get("createdTimestamp"),
+                } for u in users]
+                return web.json_response({"users": result})
+    except Exception as e:
+        return web.json_response({"error": str(e), "users": []}, status=502)
+
+
+async def handle_keycloak_events(request):
+    # Login-event logging is off by default in Keycloak - an empty list here
+    # is an honest "not enabled yet", not a proxy failure.
+    realm = request.query.get("realm", "master")
+    if not KEYCLOAK_ADMIN_PASSWORD:
+        return web.json_response({"error": "KEYCLOAK_ADMIN_PASSWORD not configured", "events": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            token = await _keycloak_admin_token(session)
+            headers = {"Authorization": f"Bearer {token}"}
+            async with session.get(f"{KEYCLOAK_URL}/admin/realms/{realm}/events?max=50", headers=headers) as resp:
+                events = await resp.json(content_type=None)
+                return web.json_response({"events": events if isinstance(events, list) else []})
+    except Exception as e:
+        return web.json_response({"error": str(e), "events": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -976,7 +1066,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -984,6 +1074,7 @@ async def handle_services_status(request):
             _http_ping(session, f"{OLLAMA_URL}/api/tags"),
             _http_ping(session, "https://velociraptor:8889/"),
             _http_ping(session, "http://st2web/"),
+            _http_ping(session, f"{KEYCLOAK_URL}/realms/master"),
         )
 
     try:
@@ -1004,6 +1095,7 @@ async def handle_services_status(request):
         {"key": "caldera", "name": "Caldera", "online": caldera_ok},
         {"key": "velociraptor", "name": "Velociraptor", "online": velo_ok},
         {"key": "stackstorm", "name": "StackStorm", "online": st2_ok},
+        {"key": "keycloak", "name": "Keycloak", "online": keycloak_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1054,6 +1146,9 @@ async def start_http_app():
     app.router.add_get("/api/velociraptor/clients", handle_velo_clients)
     app.router.add_get("/api/velociraptor/hunts", handle_velo_hunts)
     app.router.add_post("/api/velociraptor/query", handle_velo_query)
+    app.router.add_get("/api/keycloak/realms", handle_keycloak_realms)
+    app.router.add_get("/api/keycloak/users", handle_keycloak_users)
+    app.router.add_get("/api/keycloak/events", handle_keycloak_events)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
