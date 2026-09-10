@@ -832,23 +832,27 @@ async def handle_caldera_create_operation(request):
 
 
 async def handle_caldera_operation_links(request):
+    # There is no standalone /operations/{id}/links route in this Caldera
+    # build (operation_api.py only registers get/get_by_id/delete/report) -
+    # executed steps live in the "chain" field of the full operation object.
     op_id = request.match_info["op_id"]
     if not CALDERA_API_KEY:
         return web.json_response({"error": "CALDERA_API_KEY not configured", "links": []}, status=200)
     try:
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
-            async with session.get(f"{CALDERA_URL}/api/v2/operations/{op_id}/links",
+            async with session.get(f"{CALDERA_URL}/api/v2/operations/{op_id}",
                                     headers=_caldera_headers(), ssl=False) as resp:
                 data = await resp.json(content_type=None)
+                chain = data.get("chain", []) if isinstance(data, dict) else []
                 links = [{
-                    "id": l.get("id"),
+                    "id": l.get("id") or l.get("unique"),
                     "ability_id": (l.get("ability") or {}).get("ability_id"),
                     "name": (l.get("ability") or {}).get("name"),
                     "tactic": (l.get("ability") or {}).get("tactic"),
                     "technique_id": (l.get("ability") or {}).get("technique_id"),
                     "status": l.get("status"),
                     "finish": l.get("finish"),
-                } for l in data]
+                } for l in chain]
                 return web.json_response({"links": links})
     except Exception as e:
         return web.json_response({"error": str(e), "links": []}, status=502)
