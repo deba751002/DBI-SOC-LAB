@@ -882,6 +882,8 @@ services:
       - IRIS_API_KEY=${IRIS_API_KEY:-}
       - MISP_URL=https://misp:443
       - MISP_KEY=${MISP_KEY:-}
+      - CALDERA_URL_INTERNAL=http://caldera:8888
+      - CALDERA_API_KEY=${CALDERA_API_KEY_RED:-}
     networks:
       soc-net: { ipv4_address: 172.20.0.110 }
     logging: *logging

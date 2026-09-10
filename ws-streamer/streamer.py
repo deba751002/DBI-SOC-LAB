@@ -35,6 +35,7 @@ IRIS_API_KEY = os.getenv("IRIS_API_KEY", "")
 MISP_URL = os.getenv("MISP_URL", "https://misp:443")
 MISP_KEY = os.getenv("MISP_KEY", "")
 CALDERA_URL = os.getenv("CALDERA_URL_INTERNAL", "http://caldera:8888")
+CALDERA_API_KEY = os.getenv("CALDERA_API_KEY", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -742,6 +743,108 @@ async def handle_misp_feeds(request):
         return web.json_response({"error": str(e), "feeds": []}, status=502)
 
 
+# ── Caldera proxy - same rationale: `caldera` only resolves on the
+# docker network, and its API key stays server-side instead of shipping
+# to the browser.
+def _caldera_headers():
+    return {"KEY": CALDERA_API_KEY, "Accept": "application/json", "Content-Type": "application/json"}
+
+
+async def handle_caldera_adversaries(request):
+    if not CALDERA_API_KEY:
+        return web.json_response({"error": "CALDERA_API_KEY not configured", "adversaries": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CALDERA_URL}/api/v2/adversaries",
+                                    headers=_caldera_headers(), ssl=False) as resp:
+                data = await resp.json()
+                return web.json_response({"adversaries": data})
+    except Exception as e:
+        return web.json_response({"error": str(e), "adversaries": []}, status=502)
+
+
+async def handle_caldera_agents(request):
+    if not CALDERA_API_KEY:
+        return web.json_response({"error": "CALDERA_API_KEY not configured", "agents": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CALDERA_URL}/api/v2/agents",
+                                    headers=_caldera_headers(), ssl=False) as resp:
+                data = await resp.json()
+                return web.json_response({"agents": data})
+    except Exception as e:
+        return web.json_response({"error": str(e), "agents": []}, status=502)
+
+
+async def handle_caldera_operations(request):
+    if not CALDERA_API_KEY:
+        return web.json_response({"error": "CALDERA_API_KEY not configured", "operations": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CALDERA_URL}/api/v2/operations",
+                                    headers=_caldera_headers(), ssl=False) as resp:
+                data = await resp.json()
+                ops = [{
+                    "id": o.get("id"), "name": o.get("name"), "state": o.get("state"),
+                    "start": o.get("start"), "finish": o.get("finish"),
+                    "adversary": (o.get("adversary") or {}).get("name"),
+                    "group": o.get("group"),
+                } for o in data]
+                return web.json_response({"operations": ops})
+    except Exception as e:
+        return web.json_response({"error": str(e), "operations": []}, status=502)
+
+
+async def handle_caldera_create_operation(request):
+    if not CALDERA_API_KEY:
+        return web.json_response({"error": "CALDERA_API_KEY not configured"}, status=200)
+    try:
+        body = await request.json()
+        adversary_id = body.get("adversary_id")
+        name = body.get("name", "SOC Lab Operation")
+        group = body.get("group", "red")
+        if not adversary_id:
+            return web.json_response({"error": "missing adversary_id"}, status=400)
+        payload = {
+            "name": name,
+            "adversary": {"adversary_id": adversary_id},
+            "group": group,
+            "state": "running",
+            "auto_close": False,
+            "obfuscator": "plain-text",
+        }
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(f"{CALDERA_URL}/api/v2/operations",
+                                     json=payload, headers=_caldera_headers(), ssl=False) as resp:
+                data = await resp.json()
+                return web.json_response(data, status=resp.status)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+
+async def handle_caldera_operation_links(request):
+    op_id = request.match_info["op_id"]
+    if not CALDERA_API_KEY:
+        return web.json_response({"error": "CALDERA_API_KEY not configured", "links": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CALDERA_URL}/api/v2/operations/{op_id}/links",
+                                    headers=_caldera_headers(), ssl=False) as resp:
+                data = await resp.json()
+                links = [{
+                    "id": l.get("id"),
+                    "ability_id": (l.get("ability") or {}).get("ability_id"),
+                    "name": (l.get("ability") or {}).get("name"),
+                    "tactic": (l.get("ability") or {}).get("tactic"),
+                    "technique_id": (l.get("ability") or {}).get("technique_id"),
+                    "status": l.get("status"),
+                    "finish": l.get("finish"),
+                } for l in data]
+                return web.json_response({"links": links})
+    except Exception as e:
+        return web.json_response({"error": str(e), "links": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -843,6 +946,11 @@ async def start_http_app():
     app.router.add_get("/api/misp/search", handle_misp_search)
     app.router.add_get("/api/misp/events", handle_misp_events)
     app.router.add_get("/api/misp/feeds", handle_misp_feeds)
+    app.router.add_get("/api/caldera/adversaries", handle_caldera_adversaries)
+    app.router.add_get("/api/caldera/agents", handle_caldera_agents)
+    app.router.add_get("/api/caldera/operations", handle_caldera_operations)
+    app.router.add_post("/api/caldera/operations", handle_caldera_create_operation)
+    app.router.add_get("/api/caldera/operations/{op_id}/links", handle_caldera_operation_links)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)

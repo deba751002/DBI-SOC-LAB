@@ -14,6 +14,7 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
   <style>
     .rt-card {
       display: flex; flex-direction: column; gap: var(--space-2);
@@ -108,6 +109,7 @@
     <div class="topbar-title"><span class="page-icon">🔴</span> Red Team Module</div>
     <span class="topbar-meta"><span class="status-dot red"></span> Offensive tools — isolated lab network only</span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
   </header>
@@ -131,8 +133,8 @@
     </div>
 
     <div class="grid-3 mb-4">
-      <div class="kpi-card critical"><div class="kpi-label">Active Tools</div><div class="kpi-value">4</div><div class="kpi-sub">Caldera, Responder, Strix, GoPhish</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Last Operation</div><div class="kpi-value" style="font-size:18px;margin-top:4px">APT-29</div><div class="kpi-sub">85% detected by blue team</div></div>
+      <div class="kpi-card critical"><div class="kpi-label">Modules</div><div class="kpi-value">4</div><div class="kpi-sub">Caldera, Responder, Strix, GoPhish</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Caldera Agents</div><div class="kpi-value" id="rt-agent-count">—</div><div class="kpi-sub" id="rt-op-count">— operations run</div></div>
       <div class="kpi-card medium"><div class="kpi-label">Network Scope</div><div class="kpi-value" style="font-size:16px;margin-top:4px">redteam VLAN</div><div class="kpi-sub">docker compose --profile redteam</div></div>
     </div>
 
@@ -142,8 +144,8 @@
       <a href="07_caldera_attack.html" class="rt-card">
         <div class="rt-card-icon">⚔️</div>
         <div class="rt-card-name">MITRE Caldera</div>
-        <div class="rt-card-desc">Automated adversary emulation — run APT-29, insider-threat, and ransomware pre-stage operations and score blue-team detection coverage against the ATT&amp;CK matrix.</div>
-        <div class="rt-card-tags"><span class="badge badge-medium">85% detected</span></div>
+        <div class="rt-card-desc">Automated adversary emulation — launch built-in adversary profiles against connected Sandcat agents and inspect real per-technique execution results.</div>
+        <div class="rt-card-tags"><span class="badge badge-medium" id="rt-caldera-badge">checking…</span></div>
       </a>
 
       <a href="10_responder_redteam.html" class="rt-card">
@@ -171,5 +173,32 @@
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+async function refreshCaldera() {
+  try {
+    const [agentsRes, opsRes] = await Promise.all([
+      fetch(`${API_BASE}/api/caldera/agents`), fetch(`${API_BASE}/api/caldera/operations`)
+    ]);
+    const agents = (await agentsRes.json()).agents || [];
+    const ops = (await opsRes.json()).operations || [];
+    document.getElementById('rt-agent-count').textContent = agents.length;
+    document.getElementById('rt-op-count').textContent = `${ops.length} operations run`;
+    const badge = document.getElementById('rt-caldera-badge');
+    if (agents.length) {
+      badge.textContent = `${agents.length} agent${agents.length === 1 ? '' : 's'} connected`;
+      badge.className = 'badge badge-low';
+    } else {
+      badge.textContent = 'No agents connected';
+      badge.className = 'badge badge-critical';
+    }
+  } catch (e) {
+    document.getElementById('rt-agent-count').textContent = '—';
+    document.getElementById('rt-op-count').textContent = 'Caldera unreachable';
+  }
+}
+refreshCaldera();
+setInterval(refreshCaldera, 20000);
+</script>
 </body>
 </html>
