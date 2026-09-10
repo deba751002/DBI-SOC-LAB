@@ -883,8 +883,13 @@ def _get_velo_stub():
         certificate_chain=config["client_cert"].encode("utf8"),
     )
     # api_connection_string in the generated config is host-agnostic
-    # (0.0.0.0:8001) - always dial the real service name on the docker network.
-    _velo_channel = grpc.secure_channel("velociraptor:8001", creds)
+    # (0.0.0.0:8001) - always dial the real service name on the docker
+    # network. The server's cert is issued for "VelociraptorServer", not
+    # for that hostname, so grpc's TLS hostname check needs an override.
+    _velo_channel = grpc.secure_channel(
+        "velociraptor:8001", creds,
+        options=(("grpc.ssl_target_name_override", "VelociraptorServer"),),
+    )
     _velo_stub = api_pb2_grpc.APIStub(_velo_channel)
     return _velo_stub
 
