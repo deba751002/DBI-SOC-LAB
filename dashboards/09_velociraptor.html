@@ -171,7 +171,7 @@ const API_BASE = `${location.protocol}//${location.hostname}:8766`;
 
 const VQL = {
   clients: "SELECT client_id, os_info.hostname AS hostname, os_info.system AS platform FROM clients() LIMIT 20",
-  version: "SELECT version FROM info()",
+  version: "SELECT Hostname, OS, Platform, PlatformVersion, KernelVersion, Uptime FROM info()",
   hunts: "SELECT hunt_id, hunt_description, state FROM hunts() LIMIT 20",
 };
 
