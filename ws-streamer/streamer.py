@@ -773,12 +773,14 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
             _http_ping(session, f"{CALDERA_URL}/"),
             _http_ping(session, f"{OLLAMA_URL}/api/tags"),
+            _http_ping(session, "https://velociraptor:8889/"),
+            _http_ping(session, "http://st2web/"),
         )
 
     try:
@@ -797,6 +799,8 @@ async def handle_services_status(request):
         {"key": "ai_agents", "name": "AI Agents", "online": ai_ok},
         {"key": "ollama", "name": "Ollama", "online": ollama_ok},
         {"key": "caldera", "name": "Caldera", "online": caldera_ok},
+        {"key": "velociraptor", "name": "Velociraptor", "online": velo_ok},
+        {"key": "stackstorm", "name": "StackStorm", "online": st2_ok},
     ]
     return web.json_response({"services": services})
 

@@ -42,9 +42,10 @@
   .portal-body { padding:var(--space-6); }
   .section-title { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin:0 0 var(--space-4); }
   .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
-  .dash-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); text-decoration:none; color:inherit; display:block; transition:border-color .15s,transform .15s; }
+  .dash-card { position:relative; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); text-decoration:none; color:inherit; display:block; transition:border-color .15s,transform .15s; }
   .dash-card:hover { border-color:var(--accent); transform:translateY(-2px); }
   .dash-card-icon { font-size:24px; margin-bottom:var(--space-2); }
+  .dash-card-status { position:absolute; top:var(--space-4); right:var(--space-4); }
   .dash-card-name { font-size:15px; font-weight:600; margin-bottom:4px; }
   .dash-card-desc { font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3); }
   .dash-card-tags { display:flex; gap:6px; flex-wrap:wrap; }
@@ -71,7 +72,7 @@
 <header class="portal-header">
   <div class="portal-logo">DBI <span>SOC</span></div>
   <div class="portal-meta">
-    <div id="global-status-strip"></div>
+    <div id="global-status-strip" data-mode="summary"></div>
     <span class="world-clocks" id="world-clocks"></span>
     <span class="portal-clock" id="clock">--:--:-- UTC</span>
     <button class="theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
@@ -120,56 +121,56 @@
   <div class="section-title">Dashboards</div>
   <div class="dash-grid">
 
-    <a href="01_soc_overview.html" class="dash-card">
+    <a href="01_soc_overview.html" class="dash-card" data-svc="opensearch">
       <div class="dash-card-icon">🖥️</div>
       <div class="dash-card-name">SOC Overview</div>
       <div class="dash-card-desc">Live alert feed, MITRE heatmap, sensor status, top IPs</div>
       <div class="dash-card-tags"><span class="badge badge-critical">Live</span><span class="badge badge-low">WebSocket</span></div>
     </a>
 
-    <a href="02_opensearch_siem.html" class="dash-card">
+    <a href="02_opensearch_siem.html" class="dash-card" data-svc="opensearch">
       <div class="dash-card-icon">🔍</div>
       <div class="dash-card-name">OpenSearch SIEM</div>
       <div class="dash-card-desc">24h event timeline, severity breakdown, ElastAlert2 rules</div>
       <div class="dash-card-tags"><span class="badge badge-high">9 critical</span></div>
     </a>
 
-    <a href="03_zeek_network.html" class="dash-card">
+    <a href="03_zeek_network.html" class="dash-card" data-svc="zeek">
       <div class="dash-card-icon">🌐</div>
       <div class="dash-card-name">Zeek NSM</div>
       <div class="dash-card-desc">Live conn.log stream, protocol analysis, DNS anomaly detection</div>
       <div class="dash-card-tags"><span class="badge badge-medium">T1557.001</span></div>
     </a>
 
-    <a href="04_suricata_ids.html" class="dash-card">
+    <a href="04_suricata_ids.html" class="dash-card" data-svc="suricata">
       <div class="dash-card-icon">🛡️</div>
       <div class="dash-card-name">Suricata IDS</div>
       <div class="dash-card-desc">EVE JSON alert feed, category breakdown, top signatures</div>
       <div class="dash-card-tags"><span class="badge badge-critical">47 blocked</span></div>
     </a>
 
-    <a href="05_ai_agents.html" class="dash-card">
+    <a href="05_ai_agents.html" class="dash-card" data-svc="ai_agents">
       <div class="dash-card-icon">🤖</div>
       <div class="dash-card-name">AI Agents</div>
       <div class="dash-card-desc">CrewAI threat analyst, incident responder, threat hunter, detection engineer</div>
       <div class="dash-card-tags"><span class="badge badge-low">Ollama LLM</span></div>
     </a>
 
-    <a href="06_iris_cases.html" class="dash-card">
+    <a href="06_iris_cases.html" class="dash-card" data-svc="iris">
       <div class="dash-card-icon">📋</div>
       <div class="dash-card-name">DFIR-IRIS</div>
       <div class="dash-card-desc">Case management, attack timeline, IOC tracker</div>
       <div class="dash-card-tags"><span class="badge badge-critical">2 open</span></div>
     </a>
 
-    <a href="08_misp_ti.html" class="dash-card">
+    <a href="08_misp_ti.html" class="dash-card" data-svc="misp">
       <div class="dash-card-icon">🕵️</div>
       <div class="dash-card-name">MISP Threat Intel</div>
       <div class="dash-card-desc">IOC lookup, feed status, APT-29 attribution card</div>
       <div class="dash-card-tags"><span class="badge badge-low">12,847 IOCs</span></div>
     </a>
 
-    <a href="09_velociraptor.html" class="dash-card">
+    <a href="09_velociraptor.html" class="dash-card" data-svc="velociraptor">
       <div class="dash-card-icon">🦖</div>
       <div class="dash-card-name">Velociraptor DFIR</div>
       <div class="dash-card-desc">Live forensic hunts, process analysis, VQL query console</div>
@@ -190,7 +191,7 @@
       <div class="dash-card-tags"><span class="badge badge-critical">3 critical</span></div>
     </a>
 
-    <a href="13_wazuh_edr.html" class="dash-card">
+    <a href="13_wazuh_edr.html" class="dash-card" data-svc="wazuh">
       <div class="dash-card-icon">🐺</div>
       <div class="dash-card-name">Wazuh EDR</div>
       <div class="dash-card-desc">Host-based alerts, FIM, built-in CVE detector — swappable with OpenVAS</div>
@@ -295,7 +296,7 @@
       <div class="dash-card-tags"><span class="badge badge-critical">1 critical CVE</span></div>
     </a>
 
-    <a href="redteam-hub.html" class="dash-card" style="border-color:var(--critical)">
+    <a href="redteam-hub.html" class="dash-card" style="border-color:var(--critical)" data-svc="caldera">
       <div class="dash-card-icon">🔴</div>
       <div class="dash-card-name">Red Team Module</div>
       <div class="dash-card-desc">Caldera adversary emulation, Responder credential capture, Strix AI pentesting, GoPhish phishing sim — isolated offensive toolset</div>
@@ -481,6 +482,25 @@ themeToggleBtn.addEventListener('click', () => {
 });
 
 syncThemeButton();
+
+// Per-card live status dots, driven by the same /api/services/status data as the topbar summary
+document.addEventListener('soc-status-update', (e) => {
+  const services = e.detail.services || [];
+  const byKey = Object.fromEntries(services.map(s => [s.key, s.online]));
+  document.querySelectorAll('.dash-card').forEach(card => {
+    let dot = card.querySelector('.dash-card-status');
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'dash-card-status status-dot';
+      card.appendChild(dot);
+    }
+    const svc = card.dataset.svc;
+    const online = svc ? !!byKey[svc] : false;
+    dot.classList.toggle('green', online);
+    dot.classList.toggle('red', !online);
+    dot.title = svc ? (online ? 'Live' : 'Offline') : 'Status not monitored';
+  });
+});
 </script>
 </body>
 </html>

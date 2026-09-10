@@ -1,21 +1,12 @@
-/**
- * Shared "live services" status strip. Include this script on any
- * dashboard page and add a container element with id="global-status-strip"
- * (usually in the topbar) - it polls ws-streamer's real /api/services/status
- * endpoint (which checks OpenSearch cluster health, whether Zeek/Suricata/
- * Wazuh have shipped a real event in the last 5 minutes, and pings MISP/
- * DFIR-IRIS/AI Agents/Ollama/Caldera directly) and renders one dot+label
- * per service. Never invents a status - a service that can't be reached
- * shows red/OFFLINE, not a guess.
- */
 (function () {
   const API_BASE = `${location.protocol}//${location.hostname}:8766`;
   const ICONS = {
     opensearch: '🔍', suricata: '🚨', zeek: '🌐', wazuh: '🐺',
     misp: '🌍', iris: '📋', ai_agents: '🤖', ollama: '🧠', caldera: '🎯',
+    velociraptor: '🦖', stackstorm: '⚡',
   };
 
-  function render(container, services) {
+  function renderFull(container, services) {
     container.innerHTML = services.map(s => `
       <span class="status-strip-item" title="${s.name}: ${s.online ? 'online' : 'offline'}">
         <span class="status-strip-icon">${ICONS[s.key] || '⚙️'}</span>
@@ -25,30 +16,54 @@
     `).join('');
   }
 
+  function renderSummary(container, services) {
+    const up = services.filter(s => s.online).length;
+    const down = services.length - up;
+    container.innerHTML = `
+      <span class="status-strip-summary" title="${up} of ${services.length} monitored services online">
+        <span class="status-dot green"></span><span>${up} running</span>
+        <span class="status-dot red"></span><span>${down} offline</span>
+      </span>
+    `;
+  }
+
   async function refresh() {
     const container = document.getElementById('global-status-strip');
-    if (!container) return;
+    let services = [];
     try {
       const res = await fetch(`${API_BASE}/api/services/status`);
       const d = await res.json();
-      render(container, d.services || []);
+      services = d.services || [];
     } catch (e) {
-      container.innerHTML = '<span class="status-strip-item" style="color:var(--text-muted)">Status unreachable</span>';
+      services = [];
     }
-  }
 
-  // Inject minimal styling once, so every page including this script
-  // looks the same without needing to touch each page's own <style>.
-  const style = document.createElement('style');
-  style.textContent = `
-    #global-status-strip { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .status-strip-item { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--text-secondary,#94a3b8); }
-    .status-strip-icon { font-size:11px; }
-  `;
-  document.head.appendChild(style);
+    if (container) {
+      if (!services.length) {
+        container.innerHTML = '<span class="status-strip-item" style="color:var(--text-muted)">Status unreachable</span>';
+      } else if (container.dataset.mode === 'summary') {
+        renderSummary(container, services);
+      } else {
+        renderFull(container, services);
+      }
+    }
+
+    document.dispatchEvent(new CustomEvent('soc-status-update', { detail: { services } }));
+  }
 
   document.addEventListener('DOMContentLoaded', () => {
     refresh();
     setInterval(refresh, 15000);
   });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #global-status-strip { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .status-strip-item { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--text-secondary,#94a3b8); }
+    .status-strip-icon { font-size:11px; }
+    .status-strip-summary { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary,#94a3b8); font-family:var(--font-mono,monospace); }
+    .status-strip-summary .status-dot { margin-left:4px; }
+    .status-strip-summary .status-dot:first-child { margin-left:0; }
+  `;
+  document.head.appendChild(style);
 })();
