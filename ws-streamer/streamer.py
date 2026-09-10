@@ -796,6 +796,10 @@ async def handle_caldera_operations(request):
 
 
 async def handle_caldera_create_operation(request):
+    # This Caldera build's /api/v2/operations route only registers GET/DELETE -
+    # creation only exists on the legacy dispatcher at PUT /api/rest with
+    # index="operations" and a flat adversary_id (confirmed by reading
+    # rest_svc.py's _build_operation_object inside the running container).
     if not CALDERA_API_KEY:
         return web.json_response({"error": "CALDERA_API_KEY not configured"}, status=200)
     try:
@@ -806,18 +810,23 @@ async def handle_caldera_create_operation(request):
         if not adversary_id:
             return web.json_response({"error": "missing adversary_id"}, status=400)
         payload = {
+            "index": "operations",
             "name": name,
-            "adversary": {"adversary_id": adversary_id},
+            "adversary_id": adversary_id,
             "group": group,
             "state": "running",
-            "auto_close": False,
+            "auto_close": "0",
             "obfuscator": "plain-text",
         }
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
-            async with session.post(f"{CALDERA_URL}/api/v2/operations",
-                                     json=payload, headers=_caldera_headers(), ssl=False) as resp:
+            async with session.put(f"{CALDERA_URL}/api/rest",
+                                    json=payload, headers=_caldera_headers(), ssl=False) as resp:
                 data = await resp.json(content_type=None)
-                return web.json_response(data, status=resp.status)
+                op = data[0] if isinstance(data, list) and data else {}
+                return web.json_response({
+                    "id": op.get("id"), "name": op.get("name"), "state": op.get("state"),
+                    "adversary": (op.get("adversary") or {}).get("name"),
+                }, status=resp.status)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=502)
 
