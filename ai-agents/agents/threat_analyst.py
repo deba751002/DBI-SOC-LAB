@@ -2,8 +2,7 @@
 Threat Analyst Agent — L2/L3 SOC analyst specializing in alert triage, IOC enrichment,
 threat actor attribution, and initial severity assessment.
 """
-from crewai import Agent
-from langchain_community.llms import Ollama
+from crewai import Agent, LLM
 from tools import (
     OpenSearchTool, OpenSearchStatsTool,
     MISPSearchTool, MISPCreateEventTool,
@@ -12,8 +11,13 @@ import os
 
 
 def create_threat_analyst() -> Agent:
-    llm = Ollama(
-        model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
+    # CrewAI 0.105.0 dispatches every LLM call through litellm, which
+    # requires a "<provider>/<model>" string (e.g. "ollama/llama3.2:3b") -
+    # a langchain_community.llms.Ollama object doesn't supply that prefix
+    # and fails with "LLM Provider NOT provided". crewai.LLM is the
+    # supported wrapper for this version and speaks litellm's own format.
+    llm = LLM(
+        model=f"ollama/{os.getenv('OLLAMA_MODEL', 'llama3.2:3b')}",
         base_url=os.getenv("OLLAMA_URL", "http://ollama:11434"),
         temperature=0.1,
     )
