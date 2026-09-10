@@ -2,4 +2,4 @@ websockets==12.0
 opensearch-py==2.6.0
 python-dotenv==1.0.1
 aiohttp==3.9.5
-pyvelociraptor==0.15
+pyvelociraptor==0.1.14
