@@ -629,6 +629,13 @@ services:
     depends_on: [misp-db, misp-redis]
     ports:
       - "${MISP_PORT:-8080}:80"
+      # MISP's own nginx unconditionally 301-redirects port 80 to
+      # "https://$host$request_uri" (see sites-enabled/misp80 inside the
+      # container) - with only port 80 mapped, that redirect target
+      # (port 443) was never reachable from outside the docker network at
+      # all, so the web UI (and hence generating a real API key) was
+      # completely unreachable from a browser.
+      - "${MISP_HTTPS_PORT:-8843}:443"
     environment:
       - MISP_BASEURL=${MISP_BASEURL}
       - MISP_ADMIN_EMAIL=${MISP_ADMIN_EMAIL}
@@ -793,8 +800,16 @@ services:
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
       - IRIS_URL=https://dfir-iris:443
-      - MISP_URL=http://misp:80
-      - MISP_KEY=${MISP_ADMIN_PASSWORD}
+      # MISP's own nginx 301-redirects port 80 to https - requests.post()
+      # follows redirects by default but downgrades POST to GET on a 301,
+      # which silently broke every misp_search_ioc/misp_create_event call
+      # (both are POSTs). Call the real HTTPS port directly.
+      - MISP_URL=https://misp:443
+      # MISP_ADMIN_PASSWORD is the web UI login, not a valid API key
+      # (MISP itself returns 403 for it) - a real key has to be generated
+      # by hand from the MISP UI (user profile > Auth keys) and set as
+      # MISP_KEY in .env.
+      - MISP_KEY=${MISP_KEY:-}
       - VELOCIRAPTOR_URL=http://velociraptor:8889
       # stackstorm:9101 no longer resolves to anything listening on 9101 -
       # "stackstorm" is now st2web's hostname (serves the UI on port 80);
@@ -831,6 +846,8 @@ services:
       - WS_HTTP_PORT=8766
       - IRIS_URL=https://dfir-iris:443
       - IRIS_API_KEY=${IRIS_API_KEY:-}
+      - MISP_URL=https://misp:443
+      - MISP_KEY=${MISP_KEY:-}
     networks:
       soc-net: { ipv4_address: 172.20.0.110 }
     logging: *logging

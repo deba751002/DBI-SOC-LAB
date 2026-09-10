@@ -32,6 +32,8 @@ CREWAI_URL = os.getenv("CREWAI_URL", "http://crewai-soc:8500")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 IRIS_URL = os.getenv("IRIS_URL", "https://dfir-iris:443")
 IRIS_API_KEY = os.getenv("IRIS_API_KEY", "")
+MISP_URL = os.getenv("MISP_URL", "https://misp:443")
+MISP_KEY = os.getenv("MISP_KEY", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -674,6 +676,71 @@ async def handle_iris_case_timeline(request):
         return web.json_response({"error": str(e), "timeline": []}, status=502)
 
 
+# ── MISP proxy - same rationale: MISP is only reachable by hostname on
+# the docker network, its port-80 vhost 301-redirects to https (which a
+# browser or naive POST client can't follow correctly), and its API key
+# stays server-side.
+def _misp_headers():
+    return {"Authorization": MISP_KEY, "Accept": "application/json", "Content-Type": "application/json"}
+
+
+async def handle_misp_search(request):
+    value = request.query.get("value", "")
+    if not MISP_KEY:
+        return web.json_response({"error": "MISP_KEY not configured", "matches": []}, status=200)
+    if not value:
+        return web.json_response({"error": "missing ?value=", "matches": []}, status=400)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(f"{MISP_URL}/attributes/restSearch",
+                                     json={"returnFormat": "json", "value": value, "limit": 20},
+                                     headers=_misp_headers(), ssl=False) as resp:
+                data = await resp.json()
+                attrs = data.get("response", {}).get("Attribute", [])
+                return web.json_response({
+                    "value": value,
+                    "matches": len(attrs),
+                    "verdict": "MALICIOUS" if attrs else "NOT_FOUND",
+                    "attributes": [{
+                        "event_id": a.get("event_id"), "type": a.get("type"),
+                        "value": a.get("value"), "category": a.get("category"),
+                        "tags": [t.get("name") for t in a.get("Tag", [])],
+                        "timestamp": a.get("timestamp"),
+                    } for a in attrs],
+                })
+    except Exception as e:
+        return web.json_response({"error": str(e), "matches": []}, status=502)
+
+
+async def handle_misp_events(request):
+    if not MISP_KEY:
+        return web.json_response({"error": "MISP_KEY not configured", "events": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(f"{MISP_URL}/events/restSearch",
+                                     json={"returnFormat": "json", "limit": 50},
+                                     headers=_misp_headers(), ssl=False) as resp:
+                data = await resp.json()
+                events = [e.get("Event", e) for e in data.get("response", [])]
+                return web.json_response({"events": events})
+    except Exception as e:
+        return web.json_response({"error": str(e), "events": []}, status=502)
+
+
+async def handle_misp_feeds(request):
+    if not MISP_KEY:
+        return web.json_response({"error": "MISP_KEY not configured", "feeds": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{MISP_URL}/feeds/index",
+                                    headers=_misp_headers(), ssl=False) as resp:
+                data = await resp.json()
+                feeds = [f.get("Feed", f) for f in data] if isinstance(data, list) else []
+                return web.json_response({"feeds": feeds})
+    except Exception as e:
+        return web.json_response({"error": str(e), "feeds": []}, status=502)
+
+
 async def handle_event_detail(request):
     """Fetch one full document by its OpenSearch _id, for click-to-drilldown."""
     doc_id = request.match_info["id"]
@@ -709,6 +776,9 @@ async def start_http_app():
     app.router.add_get("/api/iris/cases", handle_iris_cases)
     app.router.add_get("/api/iris/case/{cid}/iocs", handle_iris_case_iocs)
     app.router.add_get("/api/iris/case/{cid}/timeline", handle_iris_case_timeline)
+    app.router.add_get("/api/misp/search", handle_misp_search)
+    app.router.add_get("/api/misp/events", handle_misp_events)
+    app.router.add_get("/api/misp/feeds", handle_misp_feeds)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
     await runner.setup()
