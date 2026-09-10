@@ -757,7 +757,7 @@ async def handle_caldera_adversaries(request):
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
             async with session.get(f"{CALDERA_URL}/api/v2/adversaries",
                                     headers=_caldera_headers(), ssl=False) as resp:
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 return web.json_response({"adversaries": data})
     except Exception as e:
         return web.json_response({"error": str(e), "adversaries": []}, status=502)
@@ -770,7 +770,7 @@ async def handle_caldera_agents(request):
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
             async with session.get(f"{CALDERA_URL}/api/v2/agents",
                                     headers=_caldera_headers(), ssl=False) as resp:
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 return web.json_response({"agents": data})
     except Exception as e:
         return web.json_response({"error": str(e), "agents": []}, status=502)
@@ -783,7 +783,7 @@ async def handle_caldera_operations(request):
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
             async with session.get(f"{CALDERA_URL}/api/v2/operations",
                                     headers=_caldera_headers(), ssl=False) as resp:
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 ops = [{
                     "id": o.get("id"), "name": o.get("name"), "state": o.get("state"),
                     "start": o.get("start"), "finish": o.get("finish"),
@@ -816,7 +816,7 @@ async def handle_caldera_create_operation(request):
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
             async with session.post(f"{CALDERA_URL}/api/v2/operations",
                                      json=payload, headers=_caldera_headers(), ssl=False) as resp:
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 return web.json_response(data, status=resp.status)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=502)
@@ -830,7 +830,7 @@ async def handle_caldera_operation_links(request):
         async with ClientSession(timeout=ClientTimeout(total=10)) as session:
             async with session.get(f"{CALDERA_URL}/api/v2/operations/{op_id}/links",
                                     headers=_caldera_headers(), ssl=False) as resp:
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 links = [{
                     "id": l.get("id"),
                     "ability_id": (l.get("ability") or {}).get("ability_id"),
