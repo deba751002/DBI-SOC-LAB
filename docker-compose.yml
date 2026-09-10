@@ -51,6 +51,7 @@ volumes:
   thehive-data:
   thehive-index:
   cortex-data:
+  es-cortex-data:
   loki-data:
   n8n-data:
   arkime-pcap:
@@ -1059,12 +1060,34 @@ services:
     hostname: cortex
     <<: *restart
     profiles: ["platform-hardening"]
+    depends_on: [elasticsearch-cortex]
     ports:
       - "${CORTEX_PORT:-9001}:9001"
     volumes:
       - cortex-data:/opt/cortex/data
     networks:
       soc-net: { ipv4_address: 172.20.0.143 }
+    logging: *logging
+
+  # Cortex's own backend store - its entrypoint defaults to resolving a host
+  # named "elasticsearch" for this, and there was no such service in this
+  # stack at all (it isn't the same OpenSearch cluster everything else uses -
+  # Cortex 3.1's ES client needs a real 7.17.x server), so every Cortex API
+  # call failed with "ElasticSearch cluster is unreachable".
+  elasticsearch-cortex:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+    container_name: soc-es-cortex
+    hostname: elasticsearch
+    <<: *restart
+    profiles: ["platform-hardening"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es-cortex-data:/usr/share/elasticsearch/data
+    networks:
+      soc-net: { ipv4_address: 172.20.0.201 }
     logging: *logging
 
   # Loki + Promtail — infra/app log aggregation, complements Grafana Metrics.
