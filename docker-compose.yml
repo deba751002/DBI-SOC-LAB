@@ -660,7 +660,16 @@ services:
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
       - MYSQL_PASSWORD=${MISP_DB_PASSWORD}
-      - REDIS_FQDN=misp-redis
+      # REDIS_FQDN doesn't exist in this image either (verified against
+      # /entrypoint.sh - the real var is REDIS_HOST, defaulting to
+      # literal hostname "redis" if unset). With the wrong name silently
+      # ignored, PHP sessions tried to store themselves via Redis at
+      # "redis:6379" - a host that doesn't exist on this network (the
+      # container is "misp-redis") - so no session ever actually
+      # persisted between requests, and neither did the CSRF token it
+      # carries: every single page load tripped MISP's CSRF protection,
+      # not just resubmitted forms.
+      - REDIS_HOST=misp-redis
     volumes:
       - misp-data:/var/www/MISP/app/files
     networks:
