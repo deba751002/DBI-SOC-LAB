@@ -884,6 +884,12 @@ services:
       - MISP_KEY=${MISP_KEY:-}
       - CALDERA_URL_INTERNAL=http://caldera:8888
       - CALDERA_API_KEY=${CALDERA_API_KEY_RED:-}
+      - VELOCIRAPTOR_API_CLIENT_CONFIG=/app/velociraptor_api_client.config.yaml
+    volumes:
+      # Velociraptor's API is gRPC + mTLS, not REST - this is the cert/key
+      # bundle from `velociraptor config api_client`, generated once on the
+      # server and kept outside the repo (it embeds a private key).
+      - ${VELOCIRAPTOR_API_CLIENT_CONFIG_HOST:-./config/velociraptor/api_client.config.yaml}:/app/velociraptor_api_client.config.yaml:ro
     networks:
       soc-net: { ipv4_address: 172.20.0.110 }
     logging: *logging

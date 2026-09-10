@@ -36,6 +36,7 @@ MISP_URL = os.getenv("MISP_URL", "https://misp:443")
 MISP_KEY = os.getenv("MISP_KEY", "")
 CALDERA_URL = os.getenv("CALDERA_URL_INTERNAL", "http://caldera:8888")
 CALDERA_API_KEY = os.getenv("CALDERA_API_KEY", "")
+VELOCIRAPTOR_API_CLIENT_CONFIG = os.getenv("VELOCIRAPTOR_API_CLIENT_CONFIG", "/app/velociraptor_api_client.config.yaml")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -858,6 +859,79 @@ async def handle_caldera_operation_links(request):
         return web.json_response({"error": str(e), "links": []}, status=502)
 
 
+# ── Velociraptor proxy - unlike everything else here this is not a REST
+# API, it's gRPC + mTLS. We authenticate with a cert/key bundle generated
+# once via `velociraptor config api_client` on the server (kept outside the
+# repo - it embeds a private key) and run VQL queries through it. grpc's
+# Python client is synchronous, so each call is pushed to a thread so it
+# doesn't block the event loop.
+_velo_channel = None
+_velo_stub = None
+
+
+def _get_velo_stub():
+    global _velo_channel, _velo_stub
+    if _velo_stub is not None:
+        return _velo_stub
+    from pyvelociraptor import LoadConfig, GetChannel
+    from pyvelociraptor import api_pb2_grpc
+    config = LoadConfig(VELOCIRAPTOR_API_CLIENT_CONFIG)
+    _velo_channel = GetChannel(config)
+    _velo_stub = api_pb2_grpc.APIStub(_velo_channel)
+    return _velo_stub
+
+
+def _velo_query_sync(vql: str, max_wait: int = 5) -> list[dict]:
+    from pyvelociraptor import api_pb2
+    stub = _get_velo_stub()
+    request = api_pb2.VQLCollectorArgs(max_wait=max_wait, Query=[api_pb2.VQLRequest(VQL=vql)])
+    rows = []
+    for response in stub.Query(request):
+        if response.Response:
+            rows.extend(json.loads(response.Response))
+    return rows
+
+
+async def _velo_query(vql: str, max_wait: int = 5) -> list[dict]:
+    return await asyncio.to_thread(_velo_query_sync, vql, max_wait)
+
+
+async def handle_velo_clients(request):
+    try:
+        rows = await _velo_query(
+            "SELECT client_id, os_info.hostname AS hostname, os_info.system AS platform, "
+            "last_seen_at, first_seen_at FROM clients() LIMIT 100"
+        )
+        return web.json_response({"clients": rows})
+    except Exception as e:
+        return web.json_response({"error": str(e), "clients": []}, status=502)
+
+
+async def handle_velo_hunts(request):
+    try:
+        rows = await _velo_query(
+            "SELECT hunt_id, hunt_description AS description, state, create_time, "
+            "start_request.artifacts AS artifacts, stats.total_clients_scheduled AS scheduled, "
+            "stats.total_clients_with_results AS with_results "
+            "FROM hunts() ORDER BY create_time DESC LIMIT 50"
+        )
+        return web.json_response({"hunts": rows})
+    except Exception as e:
+        return web.json_response({"error": str(e), "hunts": []}, status=502)
+
+
+async def handle_velo_query(request):
+    body = await request.json()
+    vql = body.get("vql", "")
+    if not vql:
+        return web.json_response({"error": "missing vql"}, status=400)
+    try:
+        rows = await _velo_query(vql, max_wait=int(body.get("max_wait", 10)))
+        return web.json_response({"rows": rows})
+    except Exception as e:
+        return web.json_response({"error": str(e), "rows": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -964,6 +1038,9 @@ async def start_http_app():
     app.router.add_get("/api/caldera/operations", handle_caldera_operations)
     app.router.add_post("/api/caldera/operations", handle_caldera_create_operation)
     app.router.add_get("/api/caldera/operations/{op_id}/links", handle_caldera_operation_links)
+    app.router.add_get("/api/velociraptor/clients", handle_velo_clients)
+    app.router.add_get("/api/velociraptor/hunts", handle_velo_hunts)
+    app.router.add_post("/api/velociraptor/query", handle_velo_query)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
