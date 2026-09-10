@@ -691,6 +691,15 @@ services:
   misp-redis:
     image: redis:7-alpine
     container_name: soc-misp-redis
+    # misp-docker's entrypoint.sh defaults REDIS_PASSWORD to "redispassword"
+    # and always sends AUTH with it - a passwordless redis-server rejects
+    # any AUTH attempt outright ("ERR Client sent AUTH, but no password is
+    # set"), which is what actually broke PHP session persistence (visible
+    # in MISP's own error.log as "Redis connection not available" /
+    # "Failed to read session data") even after fixing the REDIS_HOST
+    # name - every request got CSRF-blackholed because no session ever
+    # actually persisted, not because of a stale token.
+    command: ["redis-server", "--requirepass", "redispassword"]
     networks:
       soc-net: { ipv4_address: 172.20.0.72 }
 
