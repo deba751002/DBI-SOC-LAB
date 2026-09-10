@@ -629,17 +629,27 @@ services:
     depends_on: [misp-db, misp-redis]
     ports:
       - "${MISP_PORT:-8080}:80"
-      # MISP's own nginx unconditionally 301-redirects port 80 to
-      # "https://$host$request_uri" (see sites-enabled/misp80 inside the
-      # container) - with only port 80 mapped, that redirect target
-      # (port 443) was never reachable from outside the docker network at
-      # all, so the web UI (and hence generating a real API key) was
-      # completely unreachable from a browser.
+      # Kept as a secondary HTTPS option (misp-docker also serves the app
+      # on 443 with a self-signed cert) - not required for normal use now
+      # that DISABLE_SSL_REDIRECT below stops port 80 from bouncing here.
       - "${MISP_HTTPS_PORT:-8843}:443"
     environment:
-      - MISP_BASEURL=${MISP_BASEURL}
-      - MISP_ADMIN_EMAIL=${MISP_ADMIN_EMAIL}
-      - MISP_ADMIN_PASSPHRASE=${MISP_ADMIN_PASSWORD}
+      # ghcr.io/misp/misp-docker's actual env var names (verified against
+      # its /entrypoint.sh) are BASE_URL and ADMIN_EMAIL - MISP_BASEURL,
+      # MISP_ADMIN_EMAIL, and MISP_ADMIN_PASSPHRASE (the previous values
+      # here) don't exist in this image at all and were silently ignored,
+      # which is why MISP kept using its own defaults (baseurl
+      # "https://localhost", admin user "admin@admin.test") regardless of
+      # what was set here. There is no env var for the initial admin
+      # password in this image - it has to be set via
+      # `cake Password <email> <password>` after first boot.
+      - BASE_URL=http://${MISP_HOST:-192.168.30.206}:${MISP_PORT:-8080}
+      - ADMIN_EMAIL=${MISP_ADMIN_EMAIL}
+      # MISP's own nginx unconditionally 301-redirects port 80 to https by
+      # default (see sites-enabled/misp80 inside the container) - the
+      # rest of this lab uses plain HTTP throughout, so disable that
+      # rather than dealing with a self-signed-cert browser warning.
+      - DISABLE_SSL_REDIRECT=true
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
       - MYSQL_USER=misp
