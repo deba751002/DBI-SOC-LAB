@@ -1202,7 +1202,7 @@ services:
       - ARKIME__elasticsearch=http://opensearch-node1:9200
       - ARKIME__interface=eth0
       - ARKIME__passwordSecret=${ARKIME_PASSWORD_SECRET:-changeme-soclab-arkime}
-    command: ["capture-viewer", "--db", "http://opensearch-node1:9200 init --ifneeded", "--add-admin", "--forever"]
+    command: ["/opt/arkime/bin/docker.sh", "capture-viewer", "--db", "http://opensearch-node1:9200 init --ifneeded", "--add-admin", "--forever"]
     ports:
       - "${ARKIME_PORT:-8005}:8005"
     volumes:
