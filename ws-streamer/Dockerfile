@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY streamer.py .
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python3 -c "import websockets, asyncio; asyncio.run(websockets.connect('ws://localhost:8765'))" || exit 1
+    CMD curl -f http://localhost:8766/api/services/status || exit 1
 
 EXPOSE 8765
 
