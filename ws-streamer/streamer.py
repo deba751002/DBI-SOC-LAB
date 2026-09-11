@@ -1045,7 +1045,9 @@ def _thehive_headers():
 
 
 def _cortex_headers():
-    return {"Authorization": f"Bearer {CORTEX_API_KEY}", "Content-Type": "application/json"}
+    # No Content-Type here - Cortex's Play backend tries to parse the (empty)
+    # body as JSON on a plain GET if this header is present and errors out.
+    return {"Authorization": f"Bearer {CORTEX_API_KEY}"}
 
 
 async def handle_thehive_cases(request):
