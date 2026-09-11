@@ -1184,10 +1184,12 @@ services:
   # forensics is actually needed, not by default.
   # NOTE: dtagdevsec/arkime (the old T-Pot-style all-in-one image) was removed
   # from Docker Hub. Arkime's own current official image is
-  # ghcr.io/arkime/arkime/arkime, but it splits capture/viewer roles via a
-  # `command:` argument rather than the old env-var-only setup below - verify
-  # the exact command/env needed against https://arkime.com/docker before
-  # actually enabling this profile; not yet validated end-to-end.
+  # ghcr.io/arkime/arkime/arkime. Its entrypoint (bin/docker.sh) requires an
+  # explicit subcommand - with none given it just drops to a bare bash shell
+  # and exits immediately, which was silently crash-looping this container.
+  # Config is read from ARKIME__<key> env vars (not OPENSEARCH_HOST/INTERFACE,
+  # which docker.sh doesn't recognize at all), confirmed by reading
+  # /opt/arkime/bin/docker.sh inside the image directly.
   arkime:
     image: ghcr.io/arkime/arkime/arkime:v6-latest
     container_name: soc-arkime
@@ -1197,8 +1199,10 @@ services:
     depends_on: [opensearch-node1]
     cap_add: ["NET_ADMIN", "NET_RAW"]
     environment:
-      - OPENSEARCH_HOST=http://opensearch-node1:9200
-      - INTERFACE=eth0
+      - ARKIME__elasticsearch=http://opensearch-node1:9200
+      - ARKIME__interface=eth0
+      - ARKIME__passwordSecret=${ARKIME_PASSWORD_SECRET:-changeme-soclab-arkime}
+    command: ["capture-viewer", "--db", "http://opensearch-node1:9200 init --ifneeded", "--add-admin", "--forever"]
     ports:
       - "${ARKIME_PORT:-8005}:8005"
     volumes:
