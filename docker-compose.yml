@@ -1197,11 +1197,14 @@ services:
     <<: *restart
     profiles: ["blue-team-extensions"]
     depends_on: [opensearch-node1]
-    cap_add: ["NET_ADMIN", "NET_RAW"]
+    cap_add: ["NET_ADMIN", "NET_RAW", "IPC_LOCK"]
+    ulimits:
+      memlock: -1
     environment:
       - ARKIME__elasticsearch=http://opensearch-node1:9200
       - ARKIME__interface=eth0
       - ARKIME__passwordSecret=${ARKIME_PASSWORD_SECRET:-changeme-soclab-arkime}
+      - ARKIME__pcapDir=/data/pcap
     command: ["/opt/arkime/bin/docker.sh", "capture-viewer", "--db", "http://opensearch-node1:9200 init --ifneeded", "--add-admin", "--forever"]
     ports:
       - "${ARKIME_PORT:-8005}:8005"
