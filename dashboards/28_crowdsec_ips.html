@@ -13,6 +13,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +94,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🚧</span> CrowdSec — Community-Driven IPS</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> 247 active bans · community blocklist synced</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="cs-dot"></span> <span id="cs-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:8090" target="_blank" class="btn btn-ghost btn-sm">Open CrowdSec Console ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -105,40 +108,77 @@
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
         Complements Suricata's signature-based blocking with crowd-sourced malicious-IP reputation — if another
         CrowdSec user marks an IP malicious, this lab benefits immediately. Reads Suricata's eve.json rather than
-        duplicating packet capture.
+        duplicating packet capture. Below is the real current ban list from this instance.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card critical"><div class="kpi-label">Active Decisions</div><div class="kpi-value">247</div><div class="kpi-sub">bans in effect</div></div>
-      <div class="kpi-card info"><div class="kpi-label">Community Blocklist</div><div class="kpi-value">184K</div><div class="kpi-sub">shared malicious IPs</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Local Alerts (24h)</div><div class="kpi-value">12</div><div class="kpi-sub">from Suricata scenarios</div></div>
-      <div class="kpi-card low"><div class="kpi-label">Bounced Requests</div><div class="kpi-value">1,842</div><div class="kpi-sub">today</div></div>
+      <div class="kpi-card critical"><div class="kpi-label">Active Decisions</div><div class="kpi-value" id="kpi-decisions">0</div><div class="kpi-sub">bans in effect</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Local Bans</div><div class="kpi-value" id="kpi-local">0</div><div class="kpi-sub">from Suricata scenarios</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Community Bans</div><div class="kpi-value" id="kpi-community">0</div><div class="kpi-sub">shared blocklist</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Scenarios Triggered</div><div class="kpi-value" id="kpi-scenarios">0</div><div class="kpi-sub">unique</div></div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🚫 Recent Bans</span></div>
+      <div class="card-header"><span class="card-title">🚫 Active Bans</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>IP</th><th>Scenario</th><th>Source</th><th>Duration</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious"><td class="mono">185.220.101.45</td><td>ssh-bf</td><td>Local (Suricata)</td><td>4h</td></tr>
-            <tr><td class="mono">45.142.212.61</td><td>http-crawl-non_statics</td><td>Community blocklist</td><td>24h</td></tr>
-            <tr><td class="mono">193.32.162.9</td><td>http-probing</td><td>Community blocklist</td><td>24h</td></tr>
-          </tbody>
+          <thead><tr><th>IP</th><th>Scenario</th><th>Origin</th><th>Duration</th></tr></thead>
+          <tbody id="decisions-body"></tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">blue-team-extensions</span>
-        profile, pre-configured to consume the <span class="mono">crowdsecurity/suricata</span> collection against
-        the existing <span class="mono">suricata-logs</span> volume.
+        <div class="cs-empty" id="decisions-empty" style="display:none;color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center">
+          No active bans yet — CrowdSec is running the <span class="mono">crowdsecurity/suricata</span> collection
+          against real Suricata logs, so a ban appears here the moment a scenario actually fires.
+        </div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'crowdsec');
+    const dot = document.getElementById('cs-dot');
+    const txt = document.getElementById('cs-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'CrowdSec reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'CrowdSec unreachable'; }
+  } catch (e) {}
+}
+
+async function refreshDecisions() {
+  const body = document.getElementById('decisions-body');
+  const empty = document.getElementById('decisions-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/crowdsec/decisions`);
+    const d = await res.json();
+    const decisions = d.decisions || [];
+    document.getElementById('kpi-decisions').textContent = decisions.length;
+    document.getElementById('kpi-local').textContent = decisions.filter(x => x.origin === 'crowdsec').length;
+    document.getElementById('kpi-community').textContent = decisions.filter(x => x.origin === 'CAPI' || x.origin === 'lists').length;
+    document.getElementById('kpi-scenarios').textContent = new Set(decisions.map(x => x.scenario)).size;
+    if (!decisions.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = decisions.map((x, i) => `<tr style="cursor:pointer" data-idx="${i}">
+      <td class="mono">${x.value || '—'}</td>
+      <td>${x.scenario || '—'}</td>
+      <td><span class="badge ${x.origin === 'crowdsec' ? 'badge-critical' : 'badge-info'}">${x.origin || '—'}</span></td>
+      <td>${x.duration || '—'}</td>
+    </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(decisions[+tr.dataset.idx], `Decision — ${decisions[+tr.dataset.idx].value || ''}`)));
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshDecisions()]);
+}
+refreshAll();
+setInterval(refreshAll, 15000);
+</script>
 </body>
 </html>

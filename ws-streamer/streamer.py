@@ -57,6 +57,7 @@ CROWDSEC_URL = os.getenv("CROWDSEC_URL", "http://crowdsec:8080")
 CROWDSEC_BOUNCER_KEY = os.getenv("CROWDSEC_BOUNCER_KEY", "")
 PIHOLE_URL = os.getenv("PIHOLE_URL", "http://pihole:80")
 PIHOLE_API_TOKEN = os.getenv("PIHOLE_API_TOKEN", "")
+CYBERCHEF_URL = os.getenv("CYBERCHEF_URL", "http://cyberchef:8000")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1432,7 +1433,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok, vault_ok, arkime_ok, crowdsec_ok, pihole_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok, vault_ok, arkime_ok, crowdsec_ok, pihole_ok, cyberchef_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1449,6 +1450,7 @@ async def handle_services_status(request):
             _http_ping(session, f"{ARKIME_URL}/"),
             _http_ping(session, f"{CROWDSEC_URL}/v1/decisions", headers={"X-Api-Key": CROWDSEC_BOUNCER_KEY}),
             _http_ping(session, f"{PIHOLE_URL}/admin/api.php?status"),
+            _http_ping(session, f"{CYBERCHEF_URL}/"),
         )
 
     try:
@@ -1478,6 +1480,7 @@ async def handle_services_status(request):
         {"key": "arkime", "name": "Arkime", "online": arkime_ok},
         {"key": "crowdsec", "name": "CrowdSec", "online": crowdsec_ok},
         {"key": "pihole", "name": "Pi-hole", "online": pihole_ok},
+        {"key": "cyberchef", "name": "CyberChef", "online": cyberchef_ok},
     ]
     return web.json_response({"services": services})
 

@@ -13,6 +13,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +94,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🕳️</span> Pi-hole — DNS-Level Sinkhole</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> 12% of queries blocked · 1 client</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="ph-dot"></span> <span id="ph-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:8081/admin" target="_blank" class="btn btn-ghost btn-sm">Open Pi-hole ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -105,39 +108,103 @@
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
         Blocks known-malicious domains at DNS resolution — before the request ever reaches Suricata or pfSense.
         Complements both: pfSense filters by IP/port, Suricata inspects payloads, Pi-hole stops the lookup itself.
+        DNS listens on <span class="mono">:5353</span> — point lab clients there to see real traffic here.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card info"><div class="kpi-label">Queries Today</div><div class="kpi-value">8,420</div><div class="kpi-sub">across the lab network</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Blocked</div><div class="kpi-value">12%</div><div class="kpi-sub">1,010 queries</div></div>
-      <div class="kpi-card medium"><div class="kpi-label">Domains on Blocklist</div><div class="kpi-value">1.9M</div><div class="kpi-sub">across 4 lists</div></div>
-      <div class="kpi-card low"><div class="kpi-label">Clients</div><div class="kpi-value">6</div><div class="kpi-sub">all lab hosts</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Queries Today</div><div class="kpi-value" id="kpi-queries">0</div><div class="kpi-sub">across the lab network</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Blocked</div><div class="kpi-value" id="kpi-blocked-pct">0%</div><div class="kpi-sub" id="kpi-blocked-sub">0 queries</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Domains on Blocklist</div><div class="kpi-value" id="kpi-domains">0</div><div class="kpi-sub">gravity list</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Clients Seen</div><div class="kpi-value" id="kpi-clients">0</div><div class="kpi-sub">ever</div></div>
     </div>
 
     <div class="card mb-4">
       <div class="card-header"><span class="card-title">🚫 Top Blocked Domains</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Domain</th><th>Client</th><th>Hits</th><th>List</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious"><td class="mono">c2-relay.badnet.ru</td><td>WKSTN-FINANCE-01</td><td>47</td><td>Malware domains</td></tr>
-            <tr><td class="mono">ads.tracker-net.com</td><td>my-laptop</td><td>212</td><td>Ad/tracking</td></tr>
-            <tr class="row-suspicious"><td class="mono">update-svc-check.info</td><td>SRV-FILESERVER-01</td><td>8</td><td>Newly registered domains</td></tr>
-          </tbody>
+          <thead><tr><th>Domain</th><th>Hits</th></tr></thead>
+          <tbody id="blocked-body"></tbody>
         </table>
+        <div class="ph-empty" id="blocked-empty" style="display:none;color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center">
+          No blocked queries yet — point a lab client's DNS at this host's <span class="mono">:5353</span> to see real traffic.
+        </div>
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">blue-team-extensions</span>
-        profile. DNS on <span class="mono">:5353</span> (not 53, to avoid colliding with the host's own resolver) —
-        point lab clients there manually, or remap to 53 if this host's resolver is free.
+      <div class="card-header"><span class="card-title">🔍 Top Queried Domains</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Domain</th><th>Hits</th></tr></thead>
+          <tbody id="queried-body"></tbody>
+        </table>
+        <div class="ph-empty" id="queried-empty" style="display:none;color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center">No queries logged yet.</div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'pihole');
+    const dot = document.getElementById('ph-dot');
+    const txt = document.getElementById('ph-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'Pi-hole reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'Pi-hole unreachable'; }
+  } catch (e) {}
+}
+
+async function refreshSummary() {
+  try {
+    const res = await fetch(`${API_BASE}/api/pihole/summary`);
+    const d = await res.json();
+    document.getElementById('kpi-queries').textContent = d.dns_queries_today || 0;
+    document.getElementById('kpi-blocked-pct').textContent = (d.ads_percentage_today || 0) + '%';
+    document.getElementById('kpi-blocked-sub').textContent = `${d.ads_blocked_today || 0} queries`;
+    document.getElementById('kpi-domains').textContent = d.domains_being_blocked || 0;
+    document.getElementById('kpi-clients').textContent = d.clients_ever_seen || 0;
+  } catch (e) {}
+}
+
+async function refreshTop() {
+  const bBody = document.getElementById('blocked-body');
+  const bEmpty = document.getElementById('blocked-empty');
+  const qBody = document.getElementById('queried-body');
+  const qEmpty = document.getElementById('queried-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/pihole/top`);
+    const d = await res.json();
+    const blocked = d.top_blocked || [];
+    const queried = d.top_queried || [];
+
+    if (!blocked.length) { bBody.innerHTML = ''; bEmpty.style.display = 'block'; }
+    else {
+      bEmpty.style.display = 'none';
+      bBody.innerHTML = blocked.map(x => `<tr><td class="mono">${x.domain}</td><td>${x.count}</td></tr>`).join('');
+    }
+
+    if (!queried.length) { qBody.innerHTML = ''; qEmpty.style.display = 'block'; }
+    else {
+      qEmpty.style.display = 'none';
+      qBody.innerHTML = queried.map(x => `<tr><td class="mono">${x.domain}</td><td>${x.count}</td></tr>`).join('');
+    }
+  } catch (e) {
+    bBody.innerHTML = ''; bEmpty.style.display = 'block';
+    qBody.innerHTML = ''; qEmpty.style.display = 'block';
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshSummary(), refreshTop()]);
+}
+refreshAll();
+setInterval(refreshAll, 15000);
+</script>
 </body>
 </html>

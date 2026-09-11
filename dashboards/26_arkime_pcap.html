@@ -13,6 +13,9 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
+  <style>.arkime-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +95,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🦑</span> Arkime — Full Packet Capture Search</div>
-    <span class="topbar-meta"><span class="status-dot yellow"></span> Not started — needs one-time db.pl init</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="arkime-dot"></span> <span id="arkime-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:8005" target="_blank" class="btn btn-ghost btn-sm">Open Arkime ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -105,40 +109,97 @@
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
         Storage-heaviest add-on in this stack — full packet capture, not just metadata. Complements Zeek's
         conn.log when an investigation needs the actual packet bytes, not a summary. Uses this lab's existing
-        OpenSearch as its backend.
+        OpenSearch as its backend. Below is real, currently captured traffic — not a simulated feed.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card info"><div class="kpi-label">PCAP Captured (24h)</div><div class="kpi-value">18.4 GB</div><div class="kpi-sub">at current retention</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Sessions Indexed</div><div class="kpi-value">284K</div><div class="kpi-sub">today</div></div>
-      <div class="kpi-card critical"><div class="kpi-label">Storage Used</div><div class="kpi-value">62%</div><div class="kpi-sub">of allocated volume</div></div>
-      <div class="kpi-card medium"><div class="kpi-label">Retention</div><div class="kpi-value" style="font-size:18px;margin-top:4px">7 days</div><div class="kpi-sub">rolling</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Sessions Captured</div><div class="kpi-value" id="kpi-sessions">0</div><div class="kpi-sub">recent, live</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Total Bytes</div><div class="kpi-value" id="kpi-bytes" style="font-size:18px;margin-top:4px">0 B</div><div class="kpi-sub">this sample</div></div>
+      <div class="kpi-card critical"><div class="kpi-label">ES Cluster Status</div><div class="kpi-value" id="kpi-es-status" style="font-size:18px;margin-top:4px">—</div><div class="kpi-sub" id="kpi-es-sub">—</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Active Shards</div><div class="kpi-value" id="kpi-shards">0</div><div class="kpi-sub">Arkime's own indices</div></div>
     </div>
 
     <div class="card mb-4">
       <div class="card-header"><span class="card-title">🔍 Recent Sessions</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Time</th><th>Src</th><th>Dst</th><th>Protocol</th><th>Bytes</th><th>Tag</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious"><td class="mono">21:41:02</td><td class="mono">10.0.1.50:52411</td><td class="mono">185.220.101.45:443</td><td>TLS</td><td>4.2 MB</td><td><span class="badge badge-critical">flagged</span></td></tr>
-            <tr><td class="mono">21:40:58</td><td class="mono">10.0.1.22:49120</td><td class="mono">8.8.8.8:443</td><td>TLS</td><td>12 KB</td><td>—</td></tr>
-            <tr class="row-suspicious"><td class="mono">21:38:41</td><td class="mono">10.0.1.50:49120</td><td class="mono">185.220.101.45:80</td><td>HTTP</td><td>890 KB</td><td><span class="badge badge-high">large upload</span></td></tr>
-          </tbody>
+          <thead><tr><th>Time</th><th>Src</th><th>Dst</th><th>Protocol</th><th>Bytes</th><th>Packets</th></tr></thead>
+          <tbody id="sessions-body"></tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">blue-team-extensions</span>
-        profile. After first start, run once:
-        <span class="mono">docker exec soc-arkime db.pl http://opensearch-node1:9200 init</span>.
+        <div class="arkime-empty" id="sessions-empty" style="display:none">No sessions captured yet.</div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+function fmtProto(p) {
+  const map = { 6: 'TCP', 17: 'UDP', 1: 'ICMP', 58: 'ICMPv6' };
+  return map[p] || `proto ${p}`;
+}
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleTimeString(); } catch (e) { return '—'; }
+}
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'arkime');
+    const dot = document.getElementById('arkime-dot');
+    const txt = document.getElementById('arkime-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'Arkime reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'Arkime unreachable'; }
+  } catch (e) {}
+
+  try {
+    const res = await fetch(`${API_BASE}/api/arkime/health`);
+    const d = await res.json();
+    document.getElementById('kpi-es-status').textContent = (d.status || '—').toUpperCase();
+    document.getElementById('kpi-es-sub').textContent = `${d.number_of_nodes || 0} nodes`;
+    document.getElementById('kpi-shards').textContent = d.active_shards || 0;
+  } catch (e) {}
+}
+
+async function refreshSessions() {
+  const body = document.getElementById('sessions-body');
+  const empty = document.getElementById('sessions-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/arkime/sessions`);
+    const d = await res.json();
+    const sessions = d.sessions || [];
+    document.getElementById('kpi-sessions').textContent = d.total ?? sessions.length;
+    document.getElementById('kpi-bytes').textContent = fmtBytes(sessions.reduce((sum, s) => sum + (s.bytes || 0), 0));
+    if (!sessions.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = sessions.map((s, i) => `<tr style="cursor:pointer" data-idx="${i}">
+      <td class="mono">${fmtTime(s.first_packet)}</td>
+      <td class="mono">${s.source_ip || '—'}</td>
+      <td class="mono">${s.dest_ip || '—'}${s.dest_port ? ':' + s.dest_port : ''}</td>
+      <td>${fmtProto(s.protocol)}</td>
+      <td>${fmtBytes(s.bytes)}</td>
+      <td>${s.packets || 0}</td>
+    </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(sessions[+tr.dataset.idx].raw, `Session — ${sessions[+tr.dataset.idx].source_ip || ''}`)));
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshSessions()]);
+}
+refreshAll();
+setInterval(refreshAll, 15000);
+</script>
 </body>
 </html>
