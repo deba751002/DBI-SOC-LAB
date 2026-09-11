@@ -46,6 +46,8 @@ CORTEX_URL = os.getenv("CORTEX_URL", "http://cortex:9001")
 CORTEX_API_KEY = os.getenv("CORTEX_API_KEY", "")
 NETBOX_URL = os.getenv("NETBOX_URL", "http://netbox:8080")
 NETBOX_API_TOKEN = os.getenv("NETBOX_API_TOKEN", "")
+N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
+N8N_API_KEY = os.getenv("N8N_API_KEY", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1183,6 +1185,45 @@ async def handle_netbox_sites(request):
         return web.json_response({"error": str(e), "sites": []}, status=502)
 
 
+# ── n8n proxy
+def _n8n_headers():
+    return {"X-N8N-API-KEY": N8N_API_KEY}
+
+
+async def handle_n8n_workflows(request):
+    if not N8N_API_KEY:
+        return web.json_response({"error": "N8N_API_KEY not configured", "workflows": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{N8N_URL}/api/v1/workflows", headers=_n8n_headers()) as resp:
+                data = await resp.json(content_type=None)
+                results = data.get("data", []) if isinstance(data, dict) else []
+                workflows = [{
+                    "id": w.get("id"), "name": w.get("name"), "active": w.get("active"),
+                    "updated": w.get("updatedAt"), "nodes": len(w.get("nodes", [])),
+                } for w in results]
+                return web.json_response({"workflows": workflows})
+    except Exception as e:
+        return web.json_response({"error": str(e), "workflows": []}, status=502)
+
+
+async def handle_n8n_executions(request):
+    if not N8N_API_KEY:
+        return web.json_response({"error": "N8N_API_KEY not configured", "executions": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{N8N_URL}/api/v1/executions?limit=50", headers=_n8n_headers()) as resp:
+                data = await resp.json(content_type=None)
+                results = data.get("data", []) if isinstance(data, dict) else []
+                executions = [{
+                    "id": e.get("id"), "workflow_id": e.get("workflowId"), "status": e.get("status"),
+                    "started": e.get("startedAt"), "finished": e.get("stoppedAt"),
+                } for e in results]
+                return web.json_response({"executions": executions})
+    except Exception as e:
+        return web.json_response({"error": str(e), "executions": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -1214,7 +1255,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1226,6 +1267,7 @@ async def handle_services_status(request):
             _http_ping(session, f"{THEHIVE_URL}/api/status"),
             _http_ping(session, f"{CORTEX_URL}/api/status"),
             _http_ping(session, f"{NETBOX_URL}/api/"),
+            _http_ping(session, f"{N8N_URL}/"),
         )
 
     try:
@@ -1250,6 +1292,7 @@ async def handle_services_status(request):
         {"key": "thehive", "name": "TheHive", "online": thehive_ok},
         {"key": "cortex", "name": "Cortex", "online": cortex_ok},
         {"key": "netbox", "name": "NetBox", "online": netbox_ok},
+        {"key": "n8n", "name": "n8n", "online": n8n_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1310,6 +1353,8 @@ async def start_http_app():
     app.router.add_get("/api/netbox/devices", handle_netbox_devices)
     app.router.add_get("/api/netbox/ips", handle_netbox_ips)
     app.router.add_get("/api/netbox/sites", handle_netbox_sites)
+    app.router.add_get("/api/n8n/workflows", handle_n8n_workflows)
+    app.router.add_get("/api/n8n/executions", handle_n8n_executions)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)

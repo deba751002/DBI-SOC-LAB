@@ -13,6 +13,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <style>.n8n-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +94,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🧩</span> n8n — No-Code SOAR Workflows</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> 5 active workflows · companion to StackStorm</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="n8n-dot"></span> <span id="n8n-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:5678" target="_blank" class="btn btn-ghost btn-sm">Open n8n ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -105,42 +108,111 @@
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
         Visual drag-drop workflow builder alongside StackStorm — lets a non-developer analyst wire up
         "alert -&gt; Slack -&gt; IRIS case" without writing a Python action, for workflows that don't need StackStorm's
-        full rule-engine power.
+        full rule-engine power. Below is the real current state of this n8n instance.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card low"><div class="kpi-label">Active Workflows</div><div class="kpi-value">5</div><div class="kpi-sub">all enabled</div></div>
-      <div class="kpi-card info"><div class="kpi-label">Executions (24h)</div><div class="kpi-value">63</div><div class="kpi-sub">across all workflows</div></div>
-      <div class="kpi-card low"><div class="kpi-label">Success Rate</div><div class="kpi-value">98%</div><div class="kpi-sub">1 failed run</div></div>
-      <div class="kpi-card medium"><div class="kpi-label">Avg Runtime</div><div class="kpi-value" style="font-size:18px;margin-top:4px">1.4s</div><div class="kpi-sub">per execution</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Workflows</div><div class="kpi-value" id="kpi-workflows">0</div><div class="kpi-sub" id="kpi-workflows-sub">—</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Executions</div><div class="kpi-value" id="kpi-executions">0</div><div class="kpi-sub">all time</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Success Rate</div><div class="kpi-value" id="kpi-success">—</div><div class="kpi-sub">of executions</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Active</div><div class="kpi-value" id="kpi-active">0</div><div class="kpi-sub">enabled workflows</div></div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🔀 Active Workflows</span></div>
+      <div class="card-header"><span class="card-title">🔀 Workflows</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Workflow</th><th>Trigger</th><th>Actions</th><th>Runs (24h)</th></tr></thead>
-          <tbody>
-            <tr><td>New Critical Alert -&gt; Slack</td><td>Webhook (ElastAlert2)</td><td>Slack message</td><td>9</td></tr>
-            <tr><td>Weekly Vuln Digest</td><td>Cron (Mon 08:00)</td><td>OpenVAS query -&gt; email</td><td>1</td></tr>
-            <tr><td>New Honeypot Session -&gt; MISP</td><td>Webhook (Cowrie)</td><td>Create MISP event</td><td>22</td></tr>
-            <tr><td>IRIS Case Closed -&gt; Archive</td><td>Webhook (IRIS)</td><td>Move attachments to cold storage</td><td>2</td></tr>
-            <tr class="row-suspicious"><td>Failed Login Spike -&gt; Notify</td><td>Webhook (Wazuh)</td><td>Slack + email</td><td>29</td></tr>
-          </tbody>
+          <thead><tr><th>Workflow</th><th>Status</th><th>Nodes</th><th>Last Updated</th></tr></thead>
+          <tbody id="workflows-body"></tbody>
         </table>
+        <div class="n8n-empty" id="workflows-empty" style="display:none">
+          No workflows created yet. Build one in n8n's editor — webhook triggers pair naturally with
+          ElastAlert2/IRIS/MISP webhooks already in this stack.
+        </div>
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">platform-hardening</span>
-        profile. Set <span class="mono">N8N_USER</span> / <span class="mono">N8N_PASSWORD</span> in
-        <span class="mono">.env</span> before first start — basic auth is on by default.
+      <div class="card-header"><span class="card-title">▶️ Recent Executions</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Workflow ID</th><th>Status</th><th>Started</th><th>Finished</th></tr></thead>
+          <tbody id="executions-body"></tbody>
+        </table>
+        <div class="n8n-empty" id="executions-empty" style="display:none">No executions yet.</div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleString(); } catch (e) { return '—'; }
+}
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'n8n');
+    const dot = document.getElementById('n8n-dot');
+    const txt = document.getElementById('n8n-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'n8n reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'n8n unreachable'; }
+  } catch (e) {}
+}
+
+async function refreshWorkflows() {
+  const body = document.getElementById('workflows-body');
+  const empty = document.getElementById('workflows-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/n8n/workflows`);
+    const d = await res.json();
+    const wfs = d.workflows || [];
+    document.getElementById('kpi-workflows').textContent = wfs.length;
+    document.getElementById('kpi-active').textContent = wfs.filter(w => w.active).length;
+    document.getElementById('kpi-workflows-sub').textContent = wfs.length ? `${wfs.filter(w => w.active).length} active` : 'none created yet';
+    if (!wfs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = wfs.map(w => `<tr>
+      <td>${w.name || '—'}</td>
+      <td><span class="badge ${w.active ? 'badge-low' : 'badge-info'}">${w.active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+      <td>${w.nodes}</td>
+      <td>${fmtTime(w.updated)}</td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshExecutions() {
+  const body = document.getElementById('executions-body');
+  const empty = document.getElementById('executions-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/n8n/executions`);
+    const d = await res.json();
+    const execs = d.executions || [];
+    document.getElementById('kpi-executions').textContent = execs.length;
+    const success = execs.filter(e => e.status === 'success').length;
+    document.getElementById('kpi-success').textContent = execs.length ? Math.round(success / execs.length * 100) + '%' : '—';
+    if (!execs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = execs.map(e => `<tr>
+      <td class="mono">${e.workflow_id || '—'}</td>
+      <td><span class="badge ${e.status === 'success' ? 'badge-low' : e.status === 'error' ? 'badge-critical' : 'badge-info'}">${(e.status || '—').toUpperCase()}</span></td>
+      <td>${fmtTime(e.started)}</td>
+      <td>${fmtTime(e.finished)}</td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshWorkflows(), refreshExecutions()]);
+}
+refreshAll();
+setInterval(refreshAll, 20000);
+</script>
 </body>
 </html>

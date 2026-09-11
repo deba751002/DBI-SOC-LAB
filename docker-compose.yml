@@ -895,6 +895,8 @@ services:
       - CORTEX_API_KEY=${CORTEX_API_KEY:-}
       - NETBOX_URL=http://netbox:8080
       - NETBOX_API_TOKEN=${NETBOX_API_TOKEN:-}
+      - N8N_URL=http://n8n:5678
+      - N8N_API_KEY=${N8N_API_KEY:-}
     volumes:
       # Velociraptor's API is gRPC + mTLS, not REST - this is the cert/key
       # bundle from `velociraptor config api_client`, generated once on the
