@@ -48,6 +48,8 @@ NETBOX_URL = os.getenv("NETBOX_URL", "http://netbox:8080")
 NETBOX_API_TOKEN = os.getenv("NETBOX_API_TOKEN", "")
 N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
 N8N_API_KEY = os.getenv("N8N_API_KEY", "")
+VAULT_URL = os.getenv("VAULT_URL", "http://vault:8200")
+VAULT_TOKEN = os.getenv("VAULT_WS_STREAMER_TOKEN", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1224,6 +1226,70 @@ async def handle_n8n_executions(request):
         return web.json_response({"error": str(e), "executions": []}, status=502)
 
 
+# ── Vault proxy - deliberately never returns secret VALUES to the browser,
+# only paths/metadata (created time, version). A dashboard that displays
+# the very secrets Vault exists to protect would defeat the point of it.
+def _vault_headers():
+    return {"X-Vault-Token": VAULT_TOKEN}
+
+
+async def handle_vault_status(request):
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{VAULT_URL}/v1/sys/health") as resp:
+                data = await resp.json(content_type=None)
+                return web.json_response({
+                    "initialized": data.get("initialized"),
+                    "sealed": data.get("sealed"),
+                    "version": data.get("version"),
+                })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+
+async def handle_vault_secrets(request):
+    if not VAULT_TOKEN:
+        return web.json_response({"error": "VAULT_WS_STREAMER_TOKEN not configured", "secrets": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{VAULT_URL}/v1/secret/metadata/soc-lab?list=true", headers=_vault_headers()) as resp:
+                if resp.status == 404:
+                    return web.json_response({"secrets": []})
+                data = await resp.json(content_type=None)
+                keys = data.get("data", {}).get("keys", [])
+
+            secrets = []
+            for key in keys:
+                async with session.get(f"{VAULT_URL}/v1/secret/metadata/soc-lab/{key}", headers=_vault_headers()) as resp:
+                    meta = await resp.json(content_type=None)
+                    versions = meta.get("data", {}).get("versions", {})
+                    current = meta.get("data", {}).get("current_version")
+                    latest = versions.get(str(current), {}) if current else {}
+                    secrets.append({
+                        "path": f"secret/soc-lab/{key}",
+                        "version": current,
+                        "created": latest.get("created_time"),
+                    })
+            return web.json_response({"secrets": secrets})
+    except Exception as e:
+        return web.json_response({"error": str(e), "secrets": []}, status=502)
+
+
+async def handle_vault_mounts(request):
+    if not VAULT_TOKEN:
+        return web.json_response({"error": "VAULT_WS_STREAMER_TOKEN not configured", "mounts": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{VAULT_URL}/v1/sys/mounts", headers=_vault_headers()) as resp:
+                data = await resp.json(content_type=None)
+                mounts = data.get("data", {})
+                result = [{"path": path, "type": m.get("type")} for path, m in mounts.items()
+                          if not path.startswith(("sys/", "identity/", "cubbyhole/"))]
+                return web.json_response({"mounts": result})
+    except Exception as e:
+        return web.json_response({"error": str(e), "mounts": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -1255,7 +1321,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok, vault_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1268,6 +1334,7 @@ async def handle_services_status(request):
             _http_ping(session, f"{CORTEX_URL}/api/status"),
             _http_ping(session, f"{NETBOX_URL}/api/"),
             _http_ping(session, f"{N8N_URL}/"),
+            _http_ping(session, f"{VAULT_URL}/v1/sys/health"),
         )
 
     try:
@@ -1293,6 +1360,7 @@ async def handle_services_status(request):
         {"key": "cortex", "name": "Cortex", "online": cortex_ok},
         {"key": "netbox", "name": "NetBox", "online": netbox_ok},
         {"key": "n8n", "name": "n8n", "online": n8n_ok},
+        {"key": "vault", "name": "Vault", "online": vault_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1355,6 +1423,9 @@ async def start_http_app():
     app.router.add_get("/api/netbox/sites", handle_netbox_sites)
     app.router.add_get("/api/n8n/workflows", handle_n8n_workflows)
     app.router.add_get("/api/n8n/executions", handle_n8n_executions)
+    app.router.add_get("/api/vault/status", handle_vault_status)
+    app.router.add_get("/api/vault/secrets", handle_vault_secrets)
+    app.router.add_get("/api/vault/mounts", handle_vault_mounts)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)

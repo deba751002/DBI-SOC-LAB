@@ -897,6 +897,8 @@ services:
       - NETBOX_API_TOKEN=${NETBOX_API_TOKEN:-}
       - N8N_URL=http://n8n:5678
       - N8N_API_KEY=${N8N_API_KEY:-}
+      - VAULT_URL=http://vault:8200
+      - VAULT_WS_STREAMER_TOKEN=${VAULT_WS_STREAMER_TOKEN:-}
     volumes:
       # Velociraptor's API is gRPC + mTLS, not REST - this is the cert/key
       # bundle from `velociraptor config api_client`, generated once on the
