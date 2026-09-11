@@ -44,6 +44,8 @@ THEHIVE_URL = os.getenv("THEHIVE_URL", "http://thehive:9000")
 THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "")
 CORTEX_URL = os.getenv("CORTEX_URL", "http://cortex:9001")
 CORTEX_API_KEY = os.getenv("CORTEX_API_KEY", "")
+NETBOX_URL = os.getenv("NETBOX_URL", "http://netbox:8080")
+NETBOX_API_TOKEN = os.getenv("NETBOX_API_TOKEN", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1124,6 +1126,63 @@ async def handle_cortex_jobs(request):
         return web.json_response({"error": str(e), "jobs": []}, status=502)
 
 
+# ── NetBox proxy
+def _netbox_headers():
+    return {"Authorization": f"Token {NETBOX_API_TOKEN}"}
+
+
+async def handle_netbox_devices(request):
+    if not NETBOX_API_TOKEN:
+        return web.json_response({"error": "NETBOX_API_TOKEN not configured", "devices": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{NETBOX_URL}/api/dcim/devices/?limit=100", headers=_netbox_headers()) as resp:
+                data = await resp.json(content_type=None)
+                results = data.get("results", []) if isinstance(data, dict) else []
+                devices = [{
+                    "id": d.get("id"), "name": d.get("name"),
+                    "role": (d.get("device_role") or d.get("role") or {}).get("name"),
+                    "site": (d.get("site") or {}).get("name"),
+                    "status": (d.get("status") or {}).get("label"),
+                    "primary_ip": (d.get("primary_ip") or {}).get("address"),
+                } for d in results]
+                return web.json_response({"devices": devices, "count": data.get("count", len(devices)) if isinstance(data, dict) else len(devices)})
+    except Exception as e:
+        return web.json_response({"error": str(e), "devices": []}, status=502)
+
+
+async def handle_netbox_ips(request):
+    if not NETBOX_API_TOKEN:
+        return web.json_response({"error": "NETBOX_API_TOKEN not configured", "ips": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{NETBOX_URL}/api/ipam/ip-addresses/?limit=100", headers=_netbox_headers()) as resp:
+                data = await resp.json(content_type=None)
+                results = data.get("results", []) if isinstance(data, dict) else []
+                ips = [{
+                    "address": ip.get("address"), "status": (ip.get("status") or {}).get("label"),
+                    "assigned_to": (ip.get("assigned_object") or {}).get("device", {}).get("name")
+                    if ip.get("assigned_object") else None,
+                } for ip in results]
+                return web.json_response({"ips": ips, "count": data.get("count", len(ips)) if isinstance(data, dict) else len(ips)})
+    except Exception as e:
+        return web.json_response({"error": str(e), "ips": []}, status=502)
+
+
+async def handle_netbox_sites(request):
+    if not NETBOX_API_TOKEN:
+        return web.json_response({"error": "NETBOX_API_TOKEN not configured", "sites": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{NETBOX_URL}/api/dcim/sites/?limit=100", headers=_netbox_headers()) as resp:
+                data = await resp.json(content_type=None)
+                results = data.get("results", []) if isinstance(data, dict) else []
+                sites = [{"id": s.get("id"), "name": s.get("name"), "status": (s.get("status") or {}).get("label")} for s in results]
+                return web.json_response({"sites": sites})
+    except Exception as e:
+        return web.json_response({"error": str(e), "sites": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -1155,7 +1214,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1166,6 +1225,7 @@ async def handle_services_status(request):
             _http_ping(session, f"{KEYCLOAK_URL}/realms/master"),
             _http_ping(session, f"{THEHIVE_URL}/api/status"),
             _http_ping(session, f"{CORTEX_URL}/api/status"),
+            _http_ping(session, f"{NETBOX_URL}/api/"),
         )
 
     try:
@@ -1189,6 +1249,7 @@ async def handle_services_status(request):
         {"key": "keycloak", "name": "Keycloak", "online": keycloak_ok},
         {"key": "thehive", "name": "TheHive", "online": thehive_ok},
         {"key": "cortex", "name": "Cortex", "online": cortex_ok},
+        {"key": "netbox", "name": "NetBox", "online": netbox_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1246,6 +1307,9 @@ async def start_http_app():
     app.router.add_get("/api/thehive/alerts", handle_thehive_alerts)
     app.router.add_get("/api/cortex/analyzers", handle_cortex_analyzers)
     app.router.add_get("/api/cortex/jobs", handle_cortex_jobs)
+    app.router.add_get("/api/netbox/devices", handle_netbox_devices)
+    app.router.add_get("/api/netbox/ips", handle_netbox_ips)
+    app.router.add_get("/api/netbox/sites", handle_netbox_sites)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)

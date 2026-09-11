@@ -13,6 +13,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <style>.nb-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +94,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🗄️</span> NetBox — Asset Inventory / CMDB</div>
-    <span class="topbar-meta"><span class="status-dot yellow"></span> Not started · 6 known assets from Wazuh enrollment</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="nb-dot"></span> <span id="nb-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:8020" target="_blank" class="btn btn-ghost btn-sm">Open NetBox ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -105,43 +108,112 @@
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
         Without an asset inventory, the AI Agents coverage-gap analysis has no ground truth for
         "what do we actually have to protect." NetBox tracks every host, IP, and site so gaps can be measured
-        against a real inventory, not guesswork.
+        against a real inventory, not guesswork. Below is the real current state of this NetBox instance.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card info"><div class="kpi-label">Total Assets</div><div class="kpi-value">6</div><div class="kpi-sub">from Wazuh enrollment</div></div>
-      <div class="kpi-card low"><div class="kpi-label">Active IPs</div><div class="kpi-value">6</div><div class="kpi-sub">all reachable</div></div>
-      <div class="kpi-card medium"><div class="kpi-label">Sites</div><div class="kpi-value">1</div><div class="kpi-sub">Lab-Primary</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Unmonitored</div><div class="kpi-value">0</div><div class="kpi-sub">all have a Wazuh/FIM agent</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Devices</div><div class="kpi-value" id="kpi-devices">0</div><div class="kpi-sub">registered</div></div>
+      <div class="kpi-card low"><div class="kpi-label">IP Addresses</div><div class="kpi-value" id="kpi-ips">0</div><div class="kpi-sub">tracked</div></div>
+      <div class="kpi-card medium"><div class="kpi-label">Sites</div><div class="kpi-value" id="kpi-sites">0</div><div class="kpi-sub" id="kpi-sites-sub">—</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Unassigned IPs</div><div class="kpi-value" id="kpi-unassigned">0</div><div class="kpi-sub">no device link</div></div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🖥️ Asset Inventory</span></div>
+      <div class="card-header"><span class="card-title">🖥️ Devices</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Hostname</th><th>IP</th><th>Role</th><th>Site</th><th>Monitored By</th></tr></thead>
-          <tbody>
-            <tr><td>WIN-DC01</td><td class="mono">10.0.0.10</td><td>Domain Controller</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-            <tr><td>SRV-FILESERVER-01</td><td class="mono">10.0.0.20</td><td>File Server</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-            <tr><td>SRV-HR-02</td><td class="mono">10.0.0.21</td><td>App Server</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-            <tr><td>WKSTN-FINANCE-01</td><td class="mono">10.0.1.50</td><td>Workstation</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-            <tr><td>WKSTN-LEGAL-05</td><td class="mono">10.0.1.22</td><td>Workstation</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-            <tr><td>my-laptop</td><td class="mono">10.0.1.40</td><td>Workstation</td><td>Lab-Primary</td><td>Wazuh, FIM</td></tr>
-          </tbody>
+          <thead><tr><th>Name</th><th>Primary IP</th><th>Role</th><th>Site</th><th>Status</th></tr></thead>
+          <tbody id="devices-body"></tbody>
         </table>
+        <div class="nb-empty" id="devices-empty" style="display:none">
+          No devices registered yet. Add them via NetBox's UI (DCIM → Devices) or its API to build a real asset inventory.
+        </div>
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> (needs its own Postgres + Redis, included) behind
-        the <span class="mono">blue-team-extensions</span> profile. Set <span class="mono">NETBOX_SECRET_KEY</span>
-        and superuser creds in <span class="mono">.env</span> before first start.
+      <div class="card-header"><span class="card-title">🌐 IP Addresses</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Address</th><th>Status</th><th>Assigned To</th></tr></thead>
+          <tbody id="ips-body"></tbody>
+        </table>
+        <div class="nb-empty" id="ips-empty" style="display:none">No IP addresses tracked yet.</div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'netbox');
+    const dot = document.getElementById('nb-dot');
+    const txt = document.getElementById('nb-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'NetBox reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'NetBox unreachable'; }
+  } catch (e) {}
+}
+
+async function refreshDevices() {
+  const body = document.getElementById('devices-body');
+  const empty = document.getElementById('devices-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/netbox/devices`);
+    const d = await res.json();
+    const devices = d.devices || [];
+    document.getElementById('kpi-devices').textContent = d.count ?? devices.length;
+    if (!devices.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = devices.map(dv => `<tr>
+      <td>${dv.name || '—'}</td>
+      <td class="mono">${dv.primary_ip || '—'}</td>
+      <td>${dv.role || '—'}</td>
+      <td>${dv.site || '—'}</td>
+      <td><span class="badge badge-info">${dv.status || '—'}</span></td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshIps() {
+  const body = document.getElementById('ips-body');
+  const empty = document.getElementById('ips-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/netbox/ips`);
+    const d = await res.json();
+    const ips = d.ips || [];
+    document.getElementById('kpi-ips').textContent = d.count ?? ips.length;
+    document.getElementById('kpi-unassigned').textContent = ips.filter(ip => !ip.assigned_to).length;
+    if (!ips.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = ips.map(ip => `<tr>
+      <td class="mono">${ip.address || '—'}</td>
+      <td><span class="badge badge-info">${ip.status || '—'}</span></td>
+      <td>${ip.assigned_to || 'Unassigned'}</td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshSites() {
+  try {
+    const res = await fetch(`${API_BASE}/api/netbox/sites`);
+    const d = await res.json();
+    const sites = d.sites || [];
+    document.getElementById('kpi-sites').textContent = sites.length;
+    document.getElementById('kpi-sites-sub').textContent = sites.map(s => s.name).join(', ') || 'none created yet';
+  } catch (e) {}
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshDevices(), refreshIps(), refreshSites()]);
+}
+refreshAll();
+setInterval(refreshAll, 20000);
+</script>
 </body>
 </html>
