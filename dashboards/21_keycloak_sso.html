@@ -14,6 +14,7 @@
   </script>
   <link rel="stylesheet" href="soc-theme.css">
   <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -191,12 +192,15 @@ async function refreshRealms() {
     const master = realms.find(r => r.realm === 'master') || {};
     document.getElementById('kpi-users').textContent = master.user_count || 0;
     document.getElementById('kpi-clients').textContent = master.client_count || 0;
-    document.getElementById('realms-body').innerHTML = realms.map(r => `<tr>
+    const realmsBody = document.getElementById('realms-body');
+    realmsBody.innerHTML = realms.map((r, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${r.realm}</td>
       <td><span class="badge ${r.enabled ? 'badge-low' : 'badge-critical'}">${r.enabled ? 'YES' : 'NO'}</span></td>
       <td>${r.user_count}</td>
       <td>${r.client_count}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">${d.error || 'No realms found'}</td></tr>`;
+    realmsBody.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(realms[+tr.dataset.idx].raw, `Realm — ${realms[+tr.dataset.idx].realm}`)));
   } catch (e) {}
 }
 
@@ -205,12 +209,15 @@ async function refreshUsers() {
     const res = await fetch(`${API_BASE}/api/keycloak/users?realm=master`);
     const d = await res.json();
     const users = d.users || [];
-    document.getElementById('users-body').innerHTML = users.map(u => `<tr>
+    const usersBody = document.getElementById('users-body');
+    usersBody.innerHTML = users.map((u, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td>${u.username}</td>
       <td>${u.email || '—'}</td>
       <td><span class="badge ${u.enabled ? 'badge-low' : 'badge-critical'}">${u.enabled ? 'YES' : 'NO'}</span></td>
       <td>${fmtTime(u.created)}</td>
     </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No users</td></tr>';
+    usersBody.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(users[+tr.dataset.idx].raw, `User — ${users[+tr.dataset.idx].username}`)));
   } catch (e) {}
 }
 
@@ -228,12 +235,14 @@ async function refreshEvents() {
       return;
     }
     empty.style.display = 'none';
-    body.innerHTML = events.map(e => `<tr>
+    body.innerHTML = events.map((e, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${fmtTime(e.time)}</td>
       <td>${e.userId || 'unknown'}</td>
       <td><span class="badge ${(e.type || '').includes('ERROR') ? 'badge-critical' : 'badge-low'}">${e.type || '—'}</span></td>
       <td>${e.clientId || '—'}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(events[+tr.dataset.idx], `Event — ${events[+tr.dataset.idx].type || ''}`)));
   } catch (e) {
     body.innerHTML = '';
     empty.style.display = 'block';

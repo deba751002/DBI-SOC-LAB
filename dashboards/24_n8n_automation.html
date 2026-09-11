@@ -14,6 +14,7 @@
   </script>
   <link rel="stylesheet" href="soc-theme.css">
   <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
   <style>.n8n-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
@@ -178,12 +179,14 @@ async function refreshWorkflows() {
     document.getElementById('kpi-workflows-sub').textContent = wfs.length ? `${wfs.filter(w => w.active).length} active` : 'none created yet';
     if (!wfs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = wfs.map(w => `<tr>
+    body.innerHTML = wfs.map((w, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td>${w.name || '—'}</td>
       <td><span class="badge ${w.active ? 'badge-low' : 'badge-info'}">${w.active ? 'ACTIVE' : 'INACTIVE'}</span></td>
       <td>${w.nodes}</td>
       <td>${fmtTime(w.updated)}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(wfs[+tr.dataset.idx].raw, `Workflow — ${wfs[+tr.dataset.idx].name || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 
@@ -199,12 +202,14 @@ async function refreshExecutions() {
     document.getElementById('kpi-success').textContent = execs.length ? Math.round(success / execs.length * 100) + '%' : '—';
     if (!execs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = execs.map(e => `<tr>
+    body.innerHTML = execs.map((e, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${e.workflow_id || '—'}</td>
       <td><span class="badge ${e.status === 'success' ? 'badge-low' : e.status === 'error' ? 'badge-critical' : 'badge-info'}">${(e.status || '—').toUpperCase()}</span></td>
       <td>${fmtTime(e.started)}</td>
       <td>${fmtTime(e.finished)}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(execs[+tr.dataset.idx].raw, `Execution — ${execs[+tr.dataset.idx].id || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 

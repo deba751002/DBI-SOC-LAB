@@ -15,6 +15,7 @@
 </script>
 <link rel="stylesheet" href="soc-theme.css">
 <script src="status-strip.js"></script>
+<script src="detail-modal.js"></script>
 <style>
   .velo-empty { color: var(--text-muted); font-size: 13px; padding: var(--space-4); text-align: center; }
 </style>
@@ -216,13 +217,15 @@ async function refreshClients() {
       return;
     }
     empty.style.display = 'none';
-    body.innerHTML = clients.map(c => `<tr>
+    body.innerHTML = clients.map((c, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${c.client_id || '—'}</td>
       <td>${c.hostname || '—'}</td>
       <td>${c.platform || '—'}</td>
       <td>${fmtTime(Number(c.first_seen_at) / 1e6)}</td>
       <td>${fmtTime(Number(c.last_seen_at) / 1e6)}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(clients[+tr.dataset.idx].raw, `Client — ${clients[+tr.dataset.idx].client_id}`)));
   } catch (e) {
     body.innerHTML = '';
     empty.style.display = 'block';
@@ -245,7 +248,7 @@ async function refreshHunts() {
       return;
     }
     empty.style.display = 'none';
-    body.innerHTML = hunts.map(h => `<tr>
+    body.innerHTML = hunts.map((h, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${h.hunt_id || '—'}</td>
       <td>${h.description || '—'}</td>
       <td>${(h.artifacts || []).join(', ') || '—'}</td>
@@ -253,6 +256,8 @@ async function refreshHunts() {
       <td>${h.scheduled || 0}</td>
       <td>${h.with_results || 0}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(hunts[+tr.dataset.idx].raw, `Hunt — ${hunts[+tr.dataset.idx].hunt_id}`)));
   } catch (e) {
     body.innerHTML = '';
     empty.style.display = 'block';

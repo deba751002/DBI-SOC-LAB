@@ -14,6 +14,7 @@
   </script>
   <link rel="stylesheet" href="soc-theme.css">
   <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
   <style>.nb-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
@@ -170,13 +171,15 @@ async function refreshDevices() {
     document.getElementById('kpi-devices').textContent = d.count ?? devices.length;
     if (!devices.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = devices.map(dv => `<tr>
+    body.innerHTML = devices.map((dv, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td>${dv.name || '—'}</td>
       <td class="mono">${dv.primary_ip || '—'}</td>
       <td>${dv.role || '—'}</td>
       <td>${dv.site || '—'}</td>
       <td><span class="badge badge-info">${dv.status || '—'}</span></td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(devices[+tr.dataset.idx].raw, `Device — ${devices[+tr.dataset.idx].name || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 
@@ -191,11 +194,13 @@ async function refreshIps() {
     document.getElementById('kpi-unassigned').textContent = ips.filter(ip => !ip.assigned_to).length;
     if (!ips.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = ips.map(ip => `<tr>
+    body.innerHTML = ips.map((ip, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${ip.address || '—'}</td>
       <td><span class="badge badge-info">${ip.status || '—'}</span></td>
       <td>${ip.assigned_to || 'Unassigned'}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(ips[+tr.dataset.idx].raw, `IP — ${ips[+tr.dataset.idx].address || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 

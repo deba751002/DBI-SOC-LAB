@@ -928,25 +928,37 @@ async def _velo_query(vql: str, max_wait: int = 5) -> list[dict]:
 
 
 async def handle_velo_clients(request):
+    # SELECT * so the dashboard's detail modal has the full client record to
+    # show, not just the handful of fields the summary table renders.
     try:
-        rows = await _velo_query(
-            "SELECT client_id, os_info.hostname AS hostname, os_info.system AS platform, "
-            "last_seen_at, first_seen_at FROM clients() LIMIT 100"
-        )
-        return web.json_response({"clients": rows})
+        raw = await _velo_query("SELECT * FROM clients() LIMIT 100")
+        clients = [{
+            "client_id": r.get("client_id"),
+            "hostname": (r.get("os_info") or {}).get("hostname"),
+            "platform": (r.get("os_info") or {}).get("system"),
+            "last_seen_at": r.get("last_seen_at"),
+            "first_seen_at": r.get("first_seen_at"),
+            "raw": r,
+        } for r in raw]
+        return web.json_response({"clients": clients})
     except Exception as e:
         return web.json_response({"error": str(e), "clients": []}, status=502)
 
 
 async def handle_velo_hunts(request):
     try:
-        rows = await _velo_query(
-            "SELECT hunt_id, hunt_description AS description, state, create_time, "
-            "start_request.artifacts AS artifacts, stats.total_clients_scheduled AS scheduled, "
-            "stats.total_clients_with_results AS with_results "
-            "FROM hunts() ORDER BY create_time DESC LIMIT 50"
-        )
-        return web.json_response({"hunts": rows})
+        raw = await _velo_query("SELECT * FROM hunts() ORDER BY create_time DESC LIMIT 50")
+        hunts = [{
+            "hunt_id": r.get("hunt_id"),
+            "description": r.get("hunt_description"),
+            "state": r.get("state"),
+            "create_time": r.get("create_time"),
+            "artifacts": (r.get("start_request") or {}).get("artifacts"),
+            "scheduled": (r.get("stats") or {}).get("total_clients_scheduled"),
+            "with_results": (r.get("stats") or {}).get("total_clients_with_results"),
+            "raw": r,
+        } for r in raw]
+        return web.json_response({"hunts": hunts})
     except Exception as e:
         return web.json_response({"error": str(e), "hunts": []}, status=502)
 
@@ -1008,6 +1020,7 @@ async def handle_keycloak_realms(request):
                 result.append({
                     "realm": name, "enabled": r.get("enabled"),
                     "user_count": user_count, "client_count": len(clients),
+                    "raw": r,
                 })
             return web.json_response({"realms": result})
     except Exception as e:
@@ -1027,6 +1040,7 @@ async def handle_keycloak_users(request):
                 result = [{
                     "id": u.get("id"), "username": u.get("username"), "email": u.get("email"),
                     "enabled": u.get("enabled"), "created": u.get("createdTimestamp"),
+                    "raw": u,
                 } for u in users]
                 return web.json_response({"users": result})
     except Exception as e:
@@ -1108,7 +1122,7 @@ async def handle_cortex_analyzers(request):
                 data = await resp.json(content_type=None)
                 if not isinstance(data, list):
                     return web.json_response({"error": str(data), "analyzers": []}, status=502)
-                analyzers = [{"id": a.get("id"), "name": a.get("name"), "version": a.get("version")} for a in data]
+                analyzers = [{"id": a.get("id"), "name": a.get("name"), "version": a.get("version"), "raw": a} for a in data]
                 return web.json_response({"analyzers": analyzers})
     except Exception as e:
         return web.json_response({"error": str(e), "analyzers": []}, status=502)
@@ -1129,6 +1143,7 @@ async def handle_cortex_jobs(request):
                 jobs = [{
                     "id": j.get("id"), "analyzer": j.get("analyzerName"), "status": j.get("status"),
                     "observable": j.get("data") or j.get("dataType"), "date": j.get("createdAt"),
+                    "raw": j,
                 } for j in data]
                 return web.json_response({"jobs": jobs})
     except Exception as e:
@@ -1154,6 +1169,7 @@ async def handle_netbox_devices(request):
                     "site": (d.get("site") or {}).get("name"),
                     "status": (d.get("status") or {}).get("label"),
                     "primary_ip": (d.get("primary_ip") or {}).get("address"),
+                    "raw": d,
                 } for d in results]
                 return web.json_response({"devices": devices, "count": data.get("count", len(devices)) if isinstance(data, dict) else len(devices)})
     except Exception as e:
@@ -1172,6 +1188,7 @@ async def handle_netbox_ips(request):
                     "address": ip.get("address"), "status": (ip.get("status") or {}).get("label"),
                     "assigned_to": (ip.get("assigned_object") or {}).get("device", {}).get("name")
                     if ip.get("assigned_object") else None,
+                    "raw": ip,
                 } for ip in results]
                 return web.json_response({"ips": ips, "count": data.get("count", len(ips)) if isinstance(data, dict) else len(ips)})
     except Exception as e:
@@ -1186,7 +1203,7 @@ async def handle_netbox_sites(request):
             async with session.get(f"{NETBOX_URL}/api/dcim/sites/?limit=100", headers=_netbox_headers()) as resp:
                 data = await resp.json(content_type=None)
                 results = data.get("results", []) if isinstance(data, dict) else []
-                sites = [{"id": s.get("id"), "name": s.get("name"), "status": (s.get("status") or {}).get("label")} for s in results]
+                sites = [{"id": s.get("id"), "name": s.get("name"), "status": (s.get("status") or {}).get("label"), "raw": s} for s in results]
                 return web.json_response({"sites": sites})
     except Exception as e:
         return web.json_response({"error": str(e), "sites": []}, status=502)
@@ -1208,6 +1225,7 @@ async def handle_n8n_workflows(request):
                 workflows = [{
                     "id": w.get("id"), "name": w.get("name"), "active": w.get("active"),
                     "updated": w.get("updatedAt"), "nodes": len(w.get("nodes", [])),
+                    "raw": w,
                 } for w in results]
                 return web.json_response({"workflows": workflows})
     except Exception as e:
@@ -1225,6 +1243,7 @@ async def handle_n8n_executions(request):
                 executions = [{
                     "id": e.get("id"), "workflow_id": e.get("workflowId"), "status": e.get("status"),
                     "started": e.get("startedAt"), "finished": e.get("stoppedAt"),
+                    "raw": e,
                 } for e in results]
                 return web.json_response({"executions": executions})
     except Exception as e:

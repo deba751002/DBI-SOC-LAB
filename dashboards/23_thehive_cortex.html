@@ -14,6 +14,7 @@
   </script>
   <link rel="stylesheet" href="soc-theme.css">
   <script src="status-strip.js"></script>
+  <script src="detail-modal.js"></script>
   <style>.th-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
@@ -183,12 +184,14 @@ async function refreshCases() {
     document.getElementById('kpi-cases').textContent = cases.length;
     if (!cases.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = cases.map(c => `<tr>
+    body.innerHTML = cases.map((c, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td>${c.title || '—'}</td>
       <td>${sevBadge(c.severity)}</td>
       <td>${c.assignee || 'Unassigned'}</td>
       <td><span class="badge badge-info">${c.status || '—'}</span></td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(cases[+tr.dataset.idx], `Case — ${cases[+tr.dataset.idx].title || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 
@@ -222,12 +225,14 @@ async function refreshJobs() {
     document.getElementById('kpi-jobs').textContent = jobs.length;
     if (!jobs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    body.innerHTML = jobs.map(j => `<tr>
+    body.innerHTML = jobs.map((j, i) => `<tr style="cursor:pointer" data-idx="${i}">
       <td class="mono">${j.observable || '—'}</td>
       <td>${j.analyzer || '—'}</td>
       <td><span class="badge ${j.status === 'Success' ? 'badge-low' : j.status === 'Failure' ? 'badge-critical' : 'badge-info'}">${j.status || '—'}</span></td>
       <td>${fmtTime(j.date)}</td>
     </tr>`).join('');
+    body.querySelectorAll('tr[data-idx]').forEach(tr =>
+      tr.addEventListener('click', () => openDetailModal(jobs[+tr.dataset.idx].raw, `Analyzer Job — ${jobs[+tr.dataset.idx].analyzer || ''}`)));
   } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
 }
 
