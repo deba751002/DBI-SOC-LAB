@@ -11,7 +11,7 @@ import os
 import logging
 from datetime import datetime, timedelta, timezone
 from opensearchpy import OpenSearch, OpenSearchException
-from aiohttp import web, ClientSession, ClientTimeout
+from aiohttp import web, ClientSession, ClientTimeout, BasicAuth
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +50,13 @@ N8N_URL = os.getenv("N8N_URL", "http://n8n:5678")
 N8N_API_KEY = os.getenv("N8N_API_KEY", "")
 VAULT_URL = os.getenv("VAULT_URL", "http://vault:8200")
 VAULT_TOKEN = os.getenv("VAULT_WS_STREAMER_TOKEN", "")
+ARKIME_URL = os.getenv("ARKIME_URL", "http://arkime:8005")
+ARKIME_USER = os.getenv("ARKIME_USER", "admin")
+ARKIME_PASSWORD = os.getenv("ARKIME_PASSWORD", "admin")
+CROWDSEC_URL = os.getenv("CROWDSEC_URL", "http://crowdsec:8080")
+CROWDSEC_BOUNCER_KEY = os.getenv("CROWDSEC_BOUNCER_KEY", "")
+PIHOLE_URL = os.getenv("PIHOLE_URL", "http://pihole:80")
+PIHOLE_API_TOKEN = os.getenv("PIHOLE_API_TOKEN", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1314,6 +1321,86 @@ async def handle_vault_mounts(request):
         return web.json_response({"error": str(e), "mounts": []}, status=502)
 
 
+# ── Arkime proxy - authMode=basic (set specifically so this proxy can call
+# it; aiohttp has no built-in HTTP Digest client, which is Arkime's default).
+async def handle_arkime_sessions(request):
+    try:
+        auth = BasicAuth(ARKIME_USER, ARKIME_PASSWORD)
+        async with ClientSession(timeout=ClientTimeout(total=10), auth=auth) as session:
+            async with session.get(f"{ARKIME_URL}/api/sessions?length=50") as resp:
+                data = await resp.json(content_type=None)
+                sessions = data.get("data", []) if isinstance(data, dict) else []
+                result = [{
+                    "id": s.get("id"),
+                    "source_ip": (s.get("source") or {}).get("ip"),
+                    "dest_ip": (s.get("destination") or {}).get("ip"),
+                    "dest_port": (s.get("destination") or {}).get("port"),
+                    "protocol": s.get("ipProtocol"),
+                    "bytes": (s.get("network") or {}).get("bytes"),
+                    "packets": (s.get("network") or {}).get("packets"),
+                    "first_packet": s.get("firstPacket"),
+                    "raw": s,
+                } for s in sessions]
+                return web.json_response({"sessions": result, "total": data.get("recordsTotal", len(result))})
+    except Exception as e:
+        return web.json_response({"error": str(e), "sessions": []}, status=502)
+
+
+async def handle_arkime_health(request):
+    try:
+        auth = BasicAuth(ARKIME_USER, ARKIME_PASSWORD)
+        async with ClientSession(timeout=ClientTimeout(total=10), auth=auth) as session:
+            async with session.get(f"{ARKIME_URL}/api/eshealth") as resp:
+                data = await resp.json(content_type=None)
+                return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+
+# ── CrowdSec proxy - bouncer API key, read-only by design (bouncers can
+# only read decisions, not alerts - that needs a separate machine/watcher
+# credential with broader access, not worth provisioning for a dashboard).
+async def handle_crowdsec_decisions(request):
+    if not CROWDSEC_BOUNCER_KEY:
+        return web.json_response({"error": "CROWDSEC_BOUNCER_KEY not configured", "decisions": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CROWDSEC_URL}/v1/decisions", headers={"X-Api-Key": CROWDSEC_BOUNCER_KEY}) as resp:
+                data = await resp.json(content_type=None)
+                decisions = data if isinstance(data, list) else []
+                return web.json_response({"decisions": decisions})
+    except Exception as e:
+        return web.json_response({"error": str(e), "decisions": []}, status=502)
+
+
+# ── Pi-hole proxy - the WEBPASSWORD hash doubles as the API auth token on
+# this Pi-hole version (v5-era api.php, not the newer v6 API).
+async def handle_pihole_summary(request):
+    if not PIHOLE_API_TOKEN:
+        return web.json_response({"error": "PIHOLE_API_TOKEN not configured"}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{PIHOLE_URL}/admin/api.php?summary&auth={PIHOLE_API_TOKEN}") as resp:
+                data = await resp.json(content_type=None)
+                return web.json_response(data)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+
+
+async def handle_pihole_top_domains(request):
+    if not PIHOLE_API_TOKEN:
+        return web.json_response({"error": "PIHOLE_API_TOKEN not configured", "top_blocked": [], "top_queried": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{PIHOLE_URL}/admin/api.php?topItems=25&auth={PIHOLE_API_TOKEN}") as resp:
+                data = await resp.json(content_type=None)
+                top_queried = [{"domain": k, "count": v} for k, v in (data.get("top_queries") or {}).items()]
+                top_blocked = [{"domain": k, "count": v} for k, v in (data.get("top_ads") or {}).items()]
+                return web.json_response({"top_blocked": top_blocked, "top_queried": top_queried})
+    except Exception as e:
+        return web.json_response({"error": str(e), "top_blocked": [], "top_queried": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -1345,7 +1432,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok, vault_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok, netbox_ok, n8n_ok, vault_ok, arkime_ok, crowdsec_ok, pihole_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1359,6 +1446,9 @@ async def handle_services_status(request):
             _http_ping(session, f"{NETBOX_URL}/api/"),
             _http_ping(session, f"{N8N_URL}/"),
             _http_ping(session, f"{VAULT_URL}/v1/sys/health"),
+            _http_ping(session, f"{ARKIME_URL}/"),
+            _http_ping(session, f"{CROWDSEC_URL}/v1/decisions", headers={"X-Api-Key": CROWDSEC_BOUNCER_KEY}),
+            _http_ping(session, f"{PIHOLE_URL}/admin/api.php?status"),
         )
 
     try:
@@ -1385,6 +1475,9 @@ async def handle_services_status(request):
         {"key": "netbox", "name": "NetBox", "online": netbox_ok},
         {"key": "n8n", "name": "n8n", "online": n8n_ok},
         {"key": "vault", "name": "Vault", "online": vault_ok},
+        {"key": "arkime", "name": "Arkime", "online": arkime_ok},
+        {"key": "crowdsec", "name": "CrowdSec", "online": crowdsec_ok},
+        {"key": "pihole", "name": "Pi-hole", "online": pihole_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1450,6 +1543,11 @@ async def start_http_app():
     app.router.add_get("/api/vault/status", handle_vault_status)
     app.router.add_get("/api/vault/secrets", handle_vault_secrets)
     app.router.add_get("/api/vault/mounts", handle_vault_mounts)
+    app.router.add_get("/api/arkime/sessions", handle_arkime_sessions)
+    app.router.add_get("/api/arkime/health", handle_arkime_health)
+    app.router.add_get("/api/crowdsec/decisions", handle_crowdsec_decisions)
+    app.router.add_get("/api/pihole/summary", handle_pihole_summary)
+    app.router.add_get("/api/pihole/top", handle_pihole_top_domains)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
