@@ -235,7 +235,12 @@ async def cors_middleware(request, handler):
     else:
         resp = await handler(request)
     resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    # POST/DELETE endpoints (AI mission launch, Velociraptor VQL, Caldera
+    # operation create) were silently broken in real browsers - curl doesn't
+    # enforce CORS so this never showed up in API testing, only once a
+    # dashboard's own fetch() hit a real preflight check.
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return resp
 
 
