@@ -13,6 +13,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <style>.th-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
 <div class="layout">
@@ -92,8 +94,9 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🩹</span> TheHive + Cortex — Case Mgmt & Auto-Enrichment</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> 3 open cases · Cortex: 5 analyzers active</span>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="th-dot"></span> <span id="th-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="http://localhost:9000" target="_blank" class="btn btn-ghost btn-sm">Open TheHive ↗</a>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -103,55 +106,136 @@
 
     <div class="card mb-4" style="background:rgba(34,197,94,0.08);border:1px solid var(--low)">
       <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
-        Complements DFIR-IRIS rather than replacing it — Cortex automatically enriches every IOC against
-        VirusTotal/AbuseIPDB/Shodan the moment it's added to a case, instead of an analyst checking each one by hand.
+        Complements DFIR-IRIS rather than replacing it — Cortex can automatically enrich IOCs against
+        VirusTotal/AbuseIPDB/Shodan once those analyzers are configured with real API keys in Cortex's
+        Organization settings. Below is the real current state of both tools.
       </div>
     </div>
 
     <div class="grid-4 mb-4">
-      <div class="kpi-card critical"><div class="kpi-label">Open Cases</div><div class="kpi-value">3</div><div class="kpi-sub">1 critical</div></div>
-      <div class="kpi-card high"><div class="kpi-label">Alerts Triaged (24h)</div><div class="kpi-value">14</div><div class="kpi-sub">6 promoted to cases</div></div>
-      <div class="kpi-card info"><div class="kpi-label">Cortex Analyzers Run</div><div class="kpi-value">47</div><div class="kpi-sub">today</div></div>
-      <div class="kpi-card low"><div class="kpi-label">Avg Enrichment Time</div><div class="kpi-value" style="font-size:18px;margin-top:4px">4.2s</div><div class="kpi-sub">per IOC</div></div>
+      <div class="kpi-card critical"><div class="kpi-label">Cases</div><div class="kpi-value" id="kpi-cases">0</div><div class="kpi-sub">all time</div></div>
+      <div class="kpi-card high"><div class="kpi-label">Alerts</div><div class="kpi-value" id="kpi-alerts">0</div><div class="kpi-sub">all time</div></div>
+      <div class="kpi-card info"><div class="kpi-label">Cortex Analyzers Enabled</div><div class="kpi-value" id="kpi-analyzers">0</div><div class="kpi-sub" id="kpi-analyzers-sub">—</div></div>
+      <div class="kpi-card low"><div class="kpi-label">Analyzer Jobs Run</div><div class="kpi-value" id="kpi-jobs">0</div><div class="kpi-sub">all time</div></div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">📁 Open Cases</span></div>
+      <div class="card-header"><span class="card-title">📁 Cases</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Case</th><th>Severity</th><th>Assignee</th><th>IOCs Enriched</th><th>Status</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious"><td>APT-29 Lateral Movement</td><td><span class="badge badge-critical">Critical</span></td><td>a.sharma</td><td>8 / 8</td><td><span class="badge badge-high">In Progress</span></td></tr>
-            <tr><td>LLMNR Poisoning — Finance</td><td><span class="badge badge-high">High</span></td><td>r.iyer</td><td>3 / 3</td><td><span class="badge badge-medium">Triage</span></td></tr>
-            <tr><td>Phishing Attempt — HR</td><td><span class="badge badge-medium">Medium</span></td><td>Unassigned</td><td>1 / 2</td><td><span class="badge badge-low">New</span></td></tr>
-          </tbody>
+          <thead><tr><th>Case</th><th>Severity</th><th>Assignee</th><th>Status</th></tr></thead>
+          <tbody id="cases-body"></tbody>
         </table>
+        <div class="th-empty" id="cases-empty" style="display:none">No cases created yet in TheHive.</div>
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🧪 Cortex Analyzer Results</span></div>
+      <div class="card-header"><span class="card-title">🧪 Cortex Analyzer Jobs</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>IOC</th><th>Analyzer</th><th>Verdict</th><th>Case</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious"><td class="mono">185.220.101.45</td><td>AbuseIPDB</td><td><span class="badge badge-critical">Malicious — 98% confidence</span></td><td>APT-29 Lateral Movement</td></tr>
-            <tr class="row-suspicious"><td class="mono">svc.dmp</td><td>VirusTotal</td><td><span class="badge badge-critical">42/68 engines flagged</span></td><td>APT-29 Lateral Movement</td></tr>
-            <tr><td class="mono">45.142.212.61</td><td>Shodan</td><td><span class="badge badge-medium">Open RDP, no known CVE</span></td><td>LLMNR Poisoning — Finance</td></tr>
-          </tbody>
+          <thead><tr><th>Observable</th><th>Analyzer</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="jobs-body"></tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="card mb-4">
-      <div class="card-body" style="font-size:12px;color:var(--text-muted)">
-        Scaffolded in <span class="mono">docker-compose.yml</span> behind the <span class="mono">platform-hardening</span>
-        profile. Set <span class="mono">CORTEX_API_KEY</span> in <span class="mono">.env</span> after first Cortex login
-        (Organization -&gt; API keys) so TheHive can call it.
+        <div class="th-empty" id="jobs-empty" style="display:none">
+          No analyzer jobs have run yet — 0 analyzers are enabled in Cortex right now
+          (Organization → Analyzers, then add real API keys for VirusTotal/AbuseIPDB/Shodan etc. to enable them).
+        </div>
       </div>
     </div>
 
   </main>
 </div>
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try { return new Date(Number(ts)).toLocaleString(); } catch (e) { return '—'; }
+}
+function sevBadge(sev) {
+  const map = { 1: ['badge-low', 'Low'], 2: ['badge-medium', 'Medium'], 3: ['badge-high', 'High'], 4: ['badge-critical', 'Critical'] };
+  const [cls, label] = map[sev] || ['badge-info', 'Unknown'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const th = (d.services || []).find(s => s.key === 'thehive');
+    const cx = (d.services || []).find(s => s.key === 'cortex');
+    const dot = document.getElementById('th-dot');
+    const txt = document.getElementById('th-status-text');
+    const thOk = th && th.online, cxOk = cx && cx.online;
+    dot.className = 'status-dot ' + (thOk && cxOk ? 'green' : (thOk || cxOk ? 'yellow' : 'red'));
+    txt.textContent = `TheHive: ${thOk ? 'up' : 'down'} · Cortex: ${cxOk ? 'up' : 'down'}`;
+  } catch (e) {}
+}
+
+async function refreshCases() {
+  const body = document.getElementById('cases-body');
+  const empty = document.getElementById('cases-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/thehive/cases`);
+    const d = await res.json();
+    const cases = d.cases || [];
+    document.getElementById('kpi-cases').textContent = cases.length;
+    if (!cases.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = cases.map(c => `<tr>
+      <td>${c.title || '—'}</td>
+      <td>${sevBadge(c.severity)}</td>
+      <td>${c.assignee || 'Unassigned'}</td>
+      <td><span class="badge badge-info">${c.status || '—'}</span></td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshAlerts() {
+  try {
+    const res = await fetch(`${API_BASE}/api/thehive/alerts`);
+    const d = await res.json();
+    document.getElementById('kpi-alerts').textContent = (d.alerts || []).length;
+  } catch (e) {}
+}
+
+async function refreshAnalyzers() {
+  try {
+    const res = await fetch(`${API_BASE}/api/cortex/analyzers`);
+    const d = await res.json();
+    const analyzers = d.analyzers || [];
+    document.getElementById('kpi-analyzers').textContent = analyzers.length;
+    document.getElementById('kpi-analyzers-sub').textContent = analyzers.length
+      ? analyzers.map(a => a.name).slice(0, 3).join(', ')
+      : 'none enabled yet';
+  } catch (e) {}
+}
+
+async function refreshJobs() {
+  const body = document.getElementById('jobs-body');
+  const empty = document.getElementById('jobs-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/cortex/jobs`);
+    const d = await res.json();
+    const jobs = d.jobs || [];
+    document.getElementById('kpi-jobs').textContent = jobs.length;
+    if (!jobs.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    body.innerHTML = jobs.map(j => `<tr>
+      <td class="mono">${j.observable || '—'}</td>
+      <td>${j.analyzer || '—'}</td>
+      <td><span class="badge ${j.status === 'Success' ? 'badge-low' : j.status === 'Failure' ? 'badge-critical' : 'badge-info'}">${j.status || '—'}</span></td>
+      <td>${fmtTime(j.date)}</td>
+    </tr>`).join('');
+  } catch (e) { body.innerHTML = ''; empty.style.display = 'block'; }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshCases(), refreshAlerts(), refreshAnalyzers(), refreshJobs()]);
+}
+refreshAll();
+setInterval(refreshAll, 20000);
+</script>
 </body>
 </html>

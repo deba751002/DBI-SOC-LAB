@@ -889,6 +889,10 @@ services:
       - KEYCLOAK_URL=http://keycloak:8080
       - KEYCLOAK_ADMIN_USER=${KEYCLOAK_ADMIN:-admin}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-}
+      - THEHIVE_URL=http://thehive:9000
+      - THEHIVE_API_KEY=${THEHIVE_API_KEY:-}
+      - CORTEX_URL=http://cortex:9001
+      - CORTEX_API_KEY=${CORTEX_API_KEY:-}
     volumes:
       # Velociraptor's API is gRPC + mTLS, not REST - this is the cert/key
       # bundle from `velociraptor config api_client`, generated once on the

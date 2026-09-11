@@ -40,6 +40,10 @@ VELOCIRAPTOR_API_CLIENT_CONFIG = os.getenv("VELOCIRAPTOR_API_CLIENT_CONFIG", "/a
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KEYCLOAK_ADMIN_USER = os.getenv("KEYCLOAK_ADMIN_USER", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.getenv("KEYCLOAK_ADMIN_PASSWORD", "")
+THEHIVE_URL = os.getenv("THEHIVE_URL", "http://thehive:9000")
+THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "")
+CORTEX_URL = os.getenv("CORTEX_URL", "http://cortex:9001")
+CORTEX_API_KEY = os.getenv("CORTEX_API_KEY", "")
 
 # Connected client registry
 CLIENTS: set = set()
@@ -1035,6 +1039,89 @@ async def handle_keycloak_events(request):
         return web.json_response({"error": str(e), "events": []}, status=502)
 
 
+# ── TheHive + Cortex proxy
+def _thehive_headers():
+    return {"Authorization": f"Bearer {THEHIVE_API_KEY}", "Content-Type": "application/json"}
+
+
+def _cortex_headers():
+    return {"Authorization": f"Bearer {CORTEX_API_KEY}", "Content-Type": "application/json"}
+
+
+async def handle_thehive_cases(request):
+    if not THEHIVE_API_KEY:
+        return web.json_response({"error": "THEHIVE_API_KEY not configured", "cases": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(
+                f"{THEHIVE_URL}/api/v1/query",
+                json={"query": [{"_name": "listCase"}, {"_name": "sort", "_fields": [{"_createdAt": "desc"}]},
+                                {"_name": "page", "from": 0, "to": 50}]},
+                headers=_thehive_headers(),
+            ) as resp:
+                cases = await resp.json(content_type=None)
+                if not isinstance(cases, list):
+                    return web.json_response({"error": str(cases), "cases": []}, status=502)
+                return web.json_response({"cases": cases})
+    except Exception as e:
+        return web.json_response({"error": str(e), "cases": []}, status=502)
+
+
+async def handle_thehive_alerts(request):
+    if not THEHIVE_API_KEY:
+        return web.json_response({"error": "THEHIVE_API_KEY not configured", "alerts": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(
+                f"{THEHIVE_URL}/api/v1/query",
+                json={"query": [{"_name": "listAlert"}, {"_name": "sort", "_fields": [{"_createdAt": "desc"}]},
+                                {"_name": "page", "from": 0, "to": 50}]},
+                headers=_thehive_headers(),
+            ) as resp:
+                alerts = await resp.json(content_type=None)
+                if not isinstance(alerts, list):
+                    return web.json_response({"error": str(alerts), "alerts": []}, status=502)
+                return web.json_response({"alerts": alerts})
+    except Exception as e:
+        return web.json_response({"error": str(e), "alerts": []}, status=502)
+
+
+async def handle_cortex_analyzers(request):
+    if not CORTEX_API_KEY:
+        return web.json_response({"error": "CORTEX_API_KEY not configured", "analyzers": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.get(f"{CORTEX_URL}/api/analyzer", headers=_cortex_headers()) as resp:
+                data = await resp.json(content_type=None)
+                if not isinstance(data, list):
+                    return web.json_response({"error": str(data), "analyzers": []}, status=502)
+                analyzers = [{"id": a.get("id"), "name": a.get("name"), "version": a.get("version")} for a in data]
+                return web.json_response({"analyzers": analyzers})
+    except Exception as e:
+        return web.json_response({"error": str(e), "analyzers": []}, status=502)
+
+
+async def handle_cortex_jobs(request):
+    if not CORTEX_API_KEY:
+        return web.json_response({"error": "CORTEX_API_KEY not configured", "jobs": []}, status=200)
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with session.post(
+                f"{CORTEX_URL}/api/job/_search?range=0-50&sort=-createdAt",
+                json={"query": {"_and": []}}, headers=_cortex_headers(),
+            ) as resp:
+                data = await resp.json(content_type=None)
+                if not isinstance(data, list):
+                    return web.json_response({"error": str(data), "jobs": []}, status=502)
+                jobs = [{
+                    "id": j.get("id"), "analyzer": j.get("analyzerName"), "status": j.get("status"),
+                    "observable": j.get("data") or j.get("dataType"), "date": j.get("createdAt"),
+                } for j in data]
+                return web.json_response({"jobs": jobs})
+    except Exception as e:
+        return web.json_response({"error": str(e), "jobs": []}, status=502)
+
+
 # ── Unified services status strip - one endpoint the shared
 # status-strip.js include on every dashboard polls, so "is X actually
 # live" is answered the same way everywhere instead of N different ways.
@@ -1066,7 +1153,7 @@ async def handle_services_status(request):
     recent_types = _recent_log_types(client)
 
     async with ClientSession() as session:
-        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok = await asyncio.gather(
+        misp_ok, iris_ok, ai_ok, caldera_ok, ollama_ok, velo_ok, st2_ok, keycloak_ok, thehive_ok, cortex_ok = await asyncio.gather(
             _http_ping(session, f"{MISP_URL}/users/login"),
             _http_ping(session, f"{IRIS_URL}/"),
             _http_ping(session, f"{CREWAI_URL}/health"),
@@ -1075,6 +1162,8 @@ async def handle_services_status(request):
             _http_ping(session, "https://velociraptor:8889/"),
             _http_ping(session, "http://st2web/"),
             _http_ping(session, f"{KEYCLOAK_URL}/realms/master"),
+            _http_ping(session, f"{THEHIVE_URL}/api/status"),
+            _http_ping(session, f"{CORTEX_URL}/api/status"),
         )
 
     try:
@@ -1096,6 +1185,8 @@ async def handle_services_status(request):
         {"key": "velociraptor", "name": "Velociraptor", "online": velo_ok},
         {"key": "stackstorm", "name": "StackStorm", "online": st2_ok},
         {"key": "keycloak", "name": "Keycloak", "online": keycloak_ok},
+        {"key": "thehive", "name": "TheHive", "online": thehive_ok},
+        {"key": "cortex", "name": "Cortex", "online": cortex_ok},
     ]
     return web.json_response({"services": services})
 
@@ -1149,6 +1240,10 @@ async def start_http_app():
     app.router.add_get("/api/keycloak/realms", handle_keycloak_realms)
     app.router.add_get("/api/keycloak/users", handle_keycloak_users)
     app.router.add_get("/api/keycloak/events", handle_keycloak_events)
+    app.router.add_get("/api/thehive/cases", handle_thehive_cases)
+    app.router.add_get("/api/thehive/alerts", handle_thehive_alerts)
+    app.router.add_get("/api/cortex/analyzers", handle_cortex_analyzers)
+    app.router.add_get("/api/cortex/jobs", handle_cortex_jobs)
     app.router.add_get("/api/services/status", handle_services_status)
     app.router.add_get("/api/event/{id}", handle_event_detail)
     runner = web.AppRunner(app)
