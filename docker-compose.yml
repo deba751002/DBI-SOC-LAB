@@ -1205,6 +1205,9 @@ services:
       - ARKIME__interface=eth0
       - ARKIME__passwordSecret=${ARKIME_PASSWORD_SECRET:-changeme-soclab-arkime}
       - ARKIME__pcapDir=/data/pcap
+      # basic instead of the default digest so ws-streamer's REST client
+      # (aiohttp has no built-in digest auth support) can call the API.
+      - ARKIME__authMode=basic
     command: ["/opt/arkime/bin/docker.sh", "capture-viewer", "--db", "http://opensearch-node1:9200 init --ifneeded", "--add-admin", "--forever"]
     ports:
       - "${ARKIME_PORT:-8005}:8005"
