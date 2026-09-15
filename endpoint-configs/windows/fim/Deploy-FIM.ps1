@@ -74,7 +74,12 @@ $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
 $trigger1  = New-ScheduledTaskTrigger -AtStartup
 $trigger2  = New-ScheduledTaskTrigger -AtLogOn
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit 0
+# RestartCount/RestartInterval make this self-healing: if the watcher process
+# itself ever crashes (unhandled exception, killed, etc.) mid-session, Task
+# Scheduler restarts it within a minute - it doesn't wait for the next logon
+# or reboot to resume watching/forwarding.
+$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable -ExecutionTimeLimit 0 -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($trigger1, $trigger2) `
     -Principal $principal -Settings $settings -Description "SOC Lab lightweight file integrity watcher" | Out-Null
@@ -94,6 +99,7 @@ Write-Host " Host:        $env:COMPUTERNAME" -ForegroundColor White
 Write-Host " Vector:      ${VectorHost}:${VectorPort}" -ForegroundColor White
 Write-Host " Watched ext: $($config.watched_extensions -join ', ')" -ForegroundColor White
 Write-Host " Log file:    $($config.log_path)" -ForegroundColor White
+Write-Host " Runs:        at every startup + logon, as SYSTEM, auto-restarts within 1 min if it ever crashes" -ForegroundColor White
 $stateOk = $task -and ($task.State -in @('Ready','Running'))
 Write-Host " Task state:  $(if ($stateOk) {'OK - ' + $task.State} else {'FAILED - ' + $task.State})" -ForegroundColor $(if ($stateOk) {'Green'} else {'Red'})
 Write-Host "==================================================================" -ForegroundColor Cyan
