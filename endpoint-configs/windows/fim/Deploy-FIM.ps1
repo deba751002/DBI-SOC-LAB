@@ -79,7 +79,7 @@ $trigger   = New-ScheduledTaskTrigger -AtLogOn
 # GroupId "BUILTIN\Users" (rather than a hardcoded -UserId) also means this
 # same task definition works for whichever user logs into a machine this was
 # pushed to via RMM (ManageEngine/GPO/Intune) - no per-device username needed.
-$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -LogonType Interactive
+$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users"
 # RestartCount/RestartInterval make this self-healing: if the watcher process
 # itself ever crashes (unhandled exception, killed, etc.) mid-session, Task
 # Scheduler restarts it within a minute - it doesn't wait for the next logon
