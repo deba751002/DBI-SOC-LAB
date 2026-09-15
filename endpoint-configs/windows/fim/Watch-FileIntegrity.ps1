@@ -335,6 +335,16 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
     $watcher.IncludeSubdirectories = [bool]$global:FimConfig.include_subdirectories
     $watcher.Filter                = "*.*"
     $watcher.NotifyFilter          = [System.IO.NotifyFilters]'FileName, LastWrite, Size, DirectoryName'
+    # FileSystemWatcher's internal change-notification buffer defaults to just
+    # 8KB. On a real profile folder with background churn (OneDrive sync,
+    # Windows Search indexing, antivirus) this overflows easily - and once it
+    # does, .NET raises an Error event and the watcher goes permanently silent
+    # (no more Created/Changed/Deleted ever) until reset. Observed exactly
+    # this in testing: the first event after startup logged fine, then every
+    # subsequent file change was silently dropped forever. 64KB (the largest
+    # size with reliable non-paged pool behavior) plus the Error handler below
+    # (which resets the watcher on overflow) fixes it.
+    $watcher.InternalBufferSize    = 65536
     $watcher.EnableRaisingEvents   = $true
 
     Register-ObjectEvent -InputObject $watcher -EventName Created -SourceIdentifier "FIM_Created_$path" -Action {
@@ -360,6 +370,23 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
             $global:FimKnownFiles.Remove($old)
         }
         Send-FimEvent -Action $action -FullPath $new -Destination $old
+    } | Out-Null
+
+    # Recovers from an internal buffer overflow (see InternalBufferSize note
+    # above) - without this, the watcher silently stops reporting changes
+    # forever after the first overflow, with no visible error to anyone not
+    # watching this console. $Event.Sender is the FileSystemWatcher instance
+    # itself, so this doesn't depend on closing over the loop's $path variable.
+    Register-ObjectEvent -InputObject $watcher -EventName Error -SourceIdentifier "FIM_Error_$path" -Action {
+        $w = $Event.Sender
+        Write-Warning "$(Get-Date -Format o)  FIM watcher error on $($w.Path) (likely internal buffer overflow) - resetting"
+        try {
+            $w.EnableRaisingEvents = $false
+            Start-Sleep -Milliseconds 250
+            $w.EnableRaisingEvents = $true
+        } catch {
+            Write-Warning "Failed to reset watcher for $($w.Path): $($_.Exception.Message)"
+        }
     } | Out-Null
 
     $global:FimWatchers += $watcher
