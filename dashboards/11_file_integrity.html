@@ -15,6 +15,7 @@
   </script>
   <link rel="stylesheet" href="soc-theme.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="detail-modal.js"></script>
   <style>
     .fim-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
     .fim-legend .badge { font-size: 10px; }
@@ -62,8 +63,8 @@
     .save-note { font-size: 11px; color: var(--text-muted); margin-top: var(--space-2); }
     .save-note.ok { color: var(--low); }
 
-    #activity-table tbody tr[data-file-id] { cursor: pointer; }
-    #activity-table tbody tr[data-file-id]:hover td { background: rgba(59,130,246,0.06); }
+    #activity-table tbody tr[data-idx] { cursor: pointer; }
+    #activity-table tbody tr[data-idx]:hover td { background: rgba(59,130,246,0.06); }
     .row-download-btn { position: relative; z-index: 1; }
 
     .card-header-right { display: flex; align-items: center; gap: var(--space-3); }
@@ -119,48 +120,12 @@
     }
     .col-filter-selectall input { accent-color: var(--accent); }
 
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(5,8,16,0.75);
-      display: none; align-items: center; justify-content: center;
-      z-index: 1000; padding: var(--space-5);
+    .content-preview-box {
+      background: var(--bg-base); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: var(--space-3);
+      font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+      white-space: pre-wrap; max-height: 220px; overflow-y: auto; margin-top: var(--space-2);
     }
-    .modal-overlay:not([hidden]) { display: flex; }
-    .modal {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: var(--radius-md); width: min(820px, 100%);
-      max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.5);
-    }
-    .modal-head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: var(--space-3); padding: var(--space-4) var(--space-5);
-      border-bottom: 1px solid var(--border); position: sticky; top: 0;
-      background: var(--bg-card); font-size: 12px; color: var(--text-secondary);
-    }
-    .modal-body { padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
-    .modal-body .data-table { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-
-    #modal-restore-row:not([hidden]) { display: flex; align-items: center; gap: var(--space-3); }
-
-    .diff-chip {
-      font-size: 10px; font-family: var(--font-mono); padding: 2px 8px;
-      border-radius: 3px; border: 1px solid var(--border);
-    }
-    .diff-chip.diff-removed { color: var(--critical); background: var(--critical-dim); text-decoration: line-through; }
-    .diff-chip.diff-added   { color: var(--low); background: var(--low-dim); }
-
-    #modal-diff-note { font-size: 11px; color: var(--text-muted); }
-    .change-info {
-      background: var(--accent-dim); border: 1px solid rgba(59,130,246,0.3);
-      border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4);
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .change-info-title { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-    .change-info-row { font-size: 12px; color: var(--text-secondary); }
-    .change-info-label { color: var(--text-muted); display: inline-block; min-width: 90px; }
-
-    .diff-line { white-space: pre-wrap; padding: 1px 0; }
-    .diff-removed { color: var(--critical); background: var(--critical-dim); text-decoration: line-through; }
-    .diff-added   { color: var(--low); background: var(--low-dim); }
   </style>
 </head>
 <body>
@@ -241,7 +206,7 @@
 
   <header class="topbar">
     <div class="topbar-title"><span class="page-icon">🗂️</span> File Integrity Monitoring</div>
-    <span class="topbar-meta"><span class="status-dot green"></span> 6 endpoints reporting</span>
+    <span class="topbar-meta"><span class="status-dot green" id="fim-status-dot"></span> <span id="fim-endpoint-count">—</span></span>
     <div class="topbar-right">
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
@@ -252,13 +217,13 @@
     <div class="grid-4 mb-4">
       <div class="kpi-card info">
         <div class="kpi-label">Endpoints Reporting</div>
-        <div class="kpi-value">6</div>
-        <div class="kpi-sub">AD-joined machines</div>
+        <div class="kpi-value" id="kpi-endpoints">—</div>
+        <div class="kpi-sub">single-agent watcher (no extra ports)</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Events (24h)</div>
-        <div class="kpi-value">342</div>
-        <div class="kpi-sub">↑ 8% vs yesterday</div>
+        <div class="kpi-label">Events (this feed)</div>
+        <div class="kpi-value" id="kpi-total-events">—</div>
+        <div class="kpi-sub">most recent, live</div>
       </div>
       <div class="kpi-card low">
         <div class="kpi-label">Watched File Types</div>
@@ -266,36 +231,36 @@
         <div class="kpi-sub">admin-configured</div>
       </div>
       <div class="kpi-card critical">
-        <div class="kpi-label">Deletions (24h)</div>
-        <div class="kpi-value">12</div>
-        <div class="kpi-sub">review recommended</div>
+        <div class="kpi-label">Deletions</div>
+        <div class="kpi-value" id="kpi-deletions">—</div>
+        <div class="kpi-sub" id="kpi-recoverable-sub">— recoverable</div>
       </div>
     </div>
 
     <div class="grid-5 mb-4" id="action-filter-row">
       <div class="kpi-card low filter-box" data-filter="created" tabindex="0" role="button" aria-pressed="false">
         <div class="kpi-label">Created</div>
-        <div class="kpi-value" id="count-created">128</div>
+        <div class="kpi-value" id="count-created">—</div>
         <div class="kpi-sub">click to filter</div>
       </div>
       <div class="kpi-card accent filter-box" data-filter="renamed" tabindex="0" role="button" aria-pressed="false">
         <div class="kpi-label">Renamed</div>
-        <div class="kpi-value" id="count-renamed">61</div>
+        <div class="kpi-value" id="count-renamed">—</div>
         <div class="kpi-sub">click to filter</div>
       </div>
       <div class="kpi-card medium filter-box" data-filter="modified" tabindex="0" role="button" aria-pressed="false">
         <div class="kpi-label">Modified</div>
-        <div class="kpi-value" id="count-modified">94</div>
+        <div class="kpi-value" id="count-modified">—</div>
         <div class="kpi-sub">click to filter</div>
       </div>
       <div class="kpi-card info filter-box" data-filter="moved,copied" tabindex="0" role="button" aria-pressed="false">
         <div class="kpi-label">Copy / Move</div>
-        <div class="kpi-value" id="count-moved">73</div>
+        <div class="kpi-value" id="count-moved">—</div>
         <div class="kpi-sub">click to filter</div>
       </div>
       <div class="kpi-card critical filter-box" data-filter="deleted" tabindex="0" role="button" aria-pressed="false">
         <div class="kpi-label">Deleted</div>
-        <div class="kpi-value" id="count-deleted">12</div>
+        <div class="kpi-value" id="count-deleted">—</div>
         <div class="kpi-sub">click to filter</div>
       </div>
     </div>
@@ -310,7 +275,7 @@
           <span class="badge badge-info">MOVED</span>
           <span class="badge badge-critical">DELETED</span>
           <span class="badge badge-neutral">COPIED*</span>
-          <span style="font-size:10px;color:var(--text-muted)">*logged as CREATED — FileSystemWatcher can't tell copies from new files</span>
+          <span style="font-size:10px;color:var(--text-muted)">*MOVED/COPIED are hash-correlation heuristics (identical content seen at two paths, or a delete+create pair within a short window) — not forensic proof. See the endpoint README for details.</span>
         </div>
       </div>
     </div>
@@ -324,7 +289,7 @@
             <span id="filter-indicator-text"></span>
             <a href="#" id="filter-reset-link" style="margin-left:8px;color:var(--accent)">Reset ×</a>
           </span>
-          <button class="btn btn-ghost btn-sm" id="restore-all-btn">📦 Restore All Deleted</button>
+          <button class="btn btn-ghost btn-sm" id="restore-all-btn">📦 Restore All Recoverable</button>
           <div class="filter-btn-wrap">
             <button class="btn btn-ghost btn-sm" id="advanced-filter-btn">🔧 Advanced Filter</button>
             <div id="advanced-filter-panel" hidden>
@@ -358,24 +323,14 @@
               <th>AD User <button class="col-filter-btn" data-col="user" title="Filter">▾</button></th>
               <th>Machine <button class="col-filter-btn" data-col="machine" title="Filter">▾</button></th>
               <th>File Path</th>
-              <th>Destination</th>
+              <th>Destination / Source</th>
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr data-action="deleted" data-file-id="f-testfile-pdf" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:40"><td class="mono">13:29:40</td><td><span class="badge badge-critical">DELETED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.pdf</td><td class="mono">C:\Users\DebasishLenka\ShadowArchive\test_file.pdf</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-testfile-pdf">⬇ Download</button></td></tr>
-            <tr data-action="renamed" data-file-id="f-testfile-pptx" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:39"><td class="mono">13:29:39</td><td><span class="badge badge-accent">RENAMED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file_pptx_renamed.pptx</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.pptx</td><td class="mono">—</td></tr>
-            <tr data-action="renamed" data-file-id="f-testfile-csv" data-user="AzureAD\DebasishLenka" data-machine="my-laptop" data-time="13:29:39"><td class="mono">13:29:39</td><td><span class="badge badge-accent">RENAMED</span></td><td>AzureAD\DebasishLenka</td><td>my-laptop</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file_csv_renamed.csv</td><td class="mono">C:\Users\DebasishLenka\SecureWorkspace\test_file.csv</td><td class="mono">—</td></tr>
-            <tr class="row-suspicious" data-action="deleted" data-file-id="f-q3forecast" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="13:12:04"><td class="mono">13:12:04</td><td><span class="badge badge-critical">DELETED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Finance\Q3_forecast.xlsx</td><td class="mono">C:\Users\jsmith\ShadowArchive\Q3_forecast.xlsx</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-q3forecast">⬇ Download</button></td></tr>
-            <tr data-action="created" data-file-id="f-nda-vendor" data-user="CORP\alee" data-machine="WKSTN-LEGAL-05" data-time="13:08:51"><td class="mono">13:08:51</td><td><span class="badge badge-low">CREATED</span></td><td>CORP\alee</td><td>WKSTN-LEGAL-05</td><td class="mono">C:\Users\alee\Contracts\NDA_vendor.docx</td><td class="mono">—</td><td class="mono">—</td></tr>
-            <tr data-action="modified" data-file-id="f-headcount" data-user="CORP\bwilliams" data-machine="SRV-HR-02" data-time="12:57:22"><td class="mono">12:57:22</td><td><span class="badge badge-medium">MODIFIED</span></td><td>CORP\bwilliams</td><td>SRV-HR-02</td><td class="mono">C:\Shares\HR\headcount_2026.xlsx</td><td class="mono">—</td><td class="mono">—</td></tr>
-            <tr data-action="moved" data-file-id="f-invoice419" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="12:44:10"><td class="mono">12:44:10</td><td><span class="badge badge-info">MOVED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Desktop\invoice_419.pdf</td><td class="mono">C:\Users\jsmith\Archive\2026\invoice_419.pdf</td><td class="mono">—</td></tr>
-            <tr class="row-suspicious" data-action="deleted" data-file-id="f-legalreview" data-user="CORP\bwilliams" data-machine="SRV-HR-02" data-time="12:31:47"><td class="mono">12:31:47</td><td><span class="badge badge-critical">DELETED</span></td><td>CORP\bwilliams</td><td>SRV-HR-02</td><td class="mono">C:\Shares\HR\legal_review.docx</td><td class="mono">C:\Shares\HR\.shadowarchive\legal_review.docx</td><td><button class="btn btn-ghost btn-sm row-download-btn" data-file-id="f-legalreview">⬇ Download</button></td></tr>
-            <tr data-action="copied" data-file-id="f-msatemplate" data-user="CORP\alee" data-machine="WKSTN-LEGAL-05" data-time="12:20:03"><td class="mono">12:20:03</td><td><span class="badge badge-neutral">COPIED*</span></td><td>CORP\alee</td><td>WKSTN-LEGAL-05</td><td class="mono">C:\Users\alee\Templates\msa_template.docx</td><td class="mono">C:\Users\alee\Contracts\2026\msa_template.docx</td><td class="mono">—</td></tr>
-            <tr data-action="created" data-file-id="f-weeklysummary" data-user="CORP\jsmith" data-machine="WKSTN-FINANCE-01" data-time="12:05:18"><td class="mono">12:05:18</td><td><span class="badge badge-low">CREATED</span></td><td>CORP\jsmith</td><td>WKSTN-FINANCE-01</td><td class="mono">C:\Users\jsmith\Reports\weekly_summary.csv</td><td class="mono">—</td><td class="mono">—</td></tr>
-          </tbody>
+          <tbody id="activity-tbody"></tbody>
         </table>
         <p id="filter-empty" style="display:none;padding:var(--space-5);text-align:center;color:var(--text-muted);font-size:12px">No events for this action in the current feed sample.</p>
+        <p id="loading-note" style="padding:var(--space-5);text-align:center;color:var(--text-muted);font-size:12px">Loading real events from the endpoint watcher…</p>
       </div>
     </div>
 
@@ -383,13 +338,8 @@
     <div class="card mb-4">
       <div class="card-header"><span class="card-title">💻 Endpoints Reporting</span></div>
       <div class="card-body" style="padding-top:var(--space-3)">
-        <div class="grid-3">
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">my-laptop</span><span class="text-muted text-xs mono">AzureAD\DebasishLenka</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-FINANCE-01</span><span class="text-muted text-xs mono">CORP\jsmith</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">WKSTN-LEGAL-05</span><span class="text-muted text-xs mono">CORP\alee</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-HR-02</span><span class="text-muted text-xs mono">CORP\bwilliams</span></div>
-          <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">WIN-DC01</span><span class="text-muted text-xs mono">last seen 14m ago</span></div>
-          <div class="job-row"><span class="status-dot green"></span><span style="flex:1;font-size:12px">SRV-FILESERVER-01</span><span class="text-muted text-xs mono">SYSTEM</span></div>
+        <div class="grid-3" id="endpoints-grid">
+          <p style="font-size:12px;color:var(--text-muted)">No events yet from any endpoint.</p>
         </div>
       </div>
     </div>
@@ -466,34 +416,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="file-modal" hidden>
-  <div class="modal">
-    <div class="modal-head">
-      <span class="mono" id="modal-path">—</span>
-      <button class="btn btn-ghost btn-sm" id="modal-close">✕ close</button>
-    </div>
-    <div class="modal-body">
-      <table class="data-table">
-        <thead><tr><th>When (UTC)</th><th>Event</th><th>Owner</th><th></th></tr></thead>
-        <tbody id="modal-history-body"></tbody>
-      </table>
-
-      <div id="modal-restore-row" hidden>
-        <button class="btn btn-primary" id="modal-restore-btn">⤒ Restore this file</button>
-        <span class="save-note" id="modal-restore-note"></span>
-      </div>
-
-      <div class="fim-legend">
-        <span class="diff-chip diff-removed">- removed (earlier version)</span>
-        <span class="diff-chip diff-added">+ added (this version)</span>
-      </div>
-
-      <div id="modal-diff-note"></div>
-      <div class="json-preview" id="modal-diff-view"></div>
-    </div>
-  </div>
-</div>
-
 <script>
 const DEFAULT_EXTENSIONS = ['.docx', '.xlsx', '.pptx', '.pdf', '.csv', '.txt', '.zip'];
 const STORAGE_KEY = 'soc_fim_watched_extensions';
@@ -540,7 +462,10 @@ function render() {
     watched_extensions: extensions,
     log_path: "C:\\ProgramData\\SOCLab\\FIM\\fim-events.log",
     config_reload_seconds: 300,
-    forward_to_vector: { enabled: true, host: "vector.soc.lab", port: 6005 }
+    forward_to_vector: { enabled: true, host: "vector.soc.lab", port: 6005 },
+    shadow_copy: { enabled: true, path: "C:\\ProgramData\\SOCLab\\FIM\\ShadowCopies", max_file_mb: 20, max_store_mb: 2048 },
+    content_preview: { enabled: true, max_chars: 4000 },
+    move_correlation_window_seconds: 30
   };
   document.getElementById('json-preview').textContent = JSON.stringify(config, null, 2);
 
@@ -584,16 +509,191 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
 render();
 
+// ── Real data: fetch events from ws-streamer (backed by the actual endpoint
+// watcher's OpenSearch documents) instead of the fabricated sample rows this
+// page used to ship with. ──────────────────────────────────────────────────
+const API_BASE = 'http://192.168.30.206:8766';
+let EVENTS = []; // [{id, time, action, user, machine, file_path, destination, file_hash, file_size, content_preview, recoverable, raw}]
+
+const EVENT_BADGE_CLASS = { created: 'low', modified: 'medium', renamed: 'accent', moved: 'info', copied: 'neutral', deleted: 'critical' };
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleTimeString(); } catch (e) { return iso; }
+}
+
+async function loadFimEvents() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/fim/events?limit=200`);
+    const data = await resp.json();
+    EVENTS = data.events || [];
+
+    document.getElementById('loading-note').style.display = 'none';
+    document.getElementById('fim-status-dot').className = `status-dot ${EVENTS.length ? 'green' : 'yellow'}`;
+    document.getElementById('fim-endpoint-count').textContent =
+      `${(data.machines || []).length} endpoint(s) reporting`;
+    document.getElementById('kpi-endpoints').textContent = (data.machines || []).length;
+    document.getElementById('kpi-total-events').textContent = data.total ?? EVENTS.length;
+
+    const byAction = data.by_action || {};
+    document.getElementById('count-created').textContent = byAction.created ?? 0;
+    document.getElementById('count-renamed').textContent = byAction.renamed ?? 0;
+    document.getElementById('count-modified').textContent = byAction.modified ?? 0;
+    document.getElementById('count-moved').textContent = (byAction.moved ?? 0) + (byAction.copied ?? 0);
+    document.getElementById('count-deleted').textContent = byAction.deleted ?? 0;
+
+    const deletedEvents = EVENTS.filter(e => e.action === 'deleted');
+    const recoverableCount = deletedEvents.filter(e => e.recoverable).length;
+    document.getElementById('kpi-deletions').textContent = deletedEvents.length;
+    document.getElementById('kpi-recoverable-sub').textContent = `${recoverableCount} recoverable via shadow copy`;
+
+    renderEndpoints(data.machines || []);
+    renderTable();
+    applyFilters();
+  } catch (err) {
+    document.getElementById('loading-note').textContent =
+      'Could not reach ws-streamer for real FIM events — is the endpoint watcher deployed and forwarding to Vector?';
+    document.getElementById('fim-status-dot').className = 'status-dot red';
+  }
+}
+
+function renderEndpoints(machines) {
+  const grid = document.getElementById('endpoints-grid');
+  if (!machines.length) {
+    grid.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">No events yet from any endpoint.</p>';
+    return;
+  }
+  grid.innerHTML = '';
+  machines.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'job-row';
+    row.innerHTML = `<span class="status-dot green"></span><span style="flex:1;font-size:12px">${m}</span><span class="text-muted text-xs mono">reporting via single watcher</span>`;
+    grid.appendChild(row);
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('activity-tbody');
+  tbody.innerHTML = '';
+  EVENTS.forEach((ev, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    tr.dataset.action = ev.action;
+    tr.dataset.user = ev.user || '';
+    tr.dataset.machine = ev.machine || '';
+    tr.dataset.time = ev.time || '';
+
+    const badgeCls = EVENT_BADGE_CLASS[ev.action] || 'neutral';
+    const dlBtn = (ev.action === 'deleted' && ev.recoverable)
+      ? `<button class="btn btn-ghost btn-sm row-download-btn" data-id="${ev.id}">⬇ Restore</button>`
+      : '—';
+
+    tr.innerHTML = `
+      <td class="mono">${fmtTime(ev.time)}</td>
+      <td><span class="badge badge-${badgeCls}">${ev.action.toUpperCase()}</span></td>
+      <td>${ev.user || '—'}</td>
+      <td>${ev.machine || '—'}</td>
+      <td class="mono">${ev.file_path || '—'}</td>
+      <td class="mono">${ev.destination || '—'}</td>
+      <td>${dlBtn}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('tr[data-idx]').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('.row-download-btn')) return;
+      const ev = EVENTS[+tr.dataset.idx];
+      openDetailModal(ev.raw, `File Integrity — ${ev.action.toUpperCase()} — ${(ev.file_path || '').split('\\\\').pop()}`);
+    });
+  });
+
+  tbody.querySelectorAll('.row-download-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await restoreOneEvent(btn.dataset.id, btn);
+    });
+  });
+}
+
+function b64ToBlob(b64) {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr]);
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Pulls the real recoverable content for one deleted event from ws-streamer
+// (which reads it back out of OpenSearch - the endpoint itself is never
+// contacted again, since there is no inbound channel to it by design) and
+// saves the exact original bytes.
+async function restoreOneEvent(id, btn) {
+  const orig = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
+  try {
+    const resp = await fetch(`${API_BASE}/api/fim/restore/${id}`);
+    if (!resp.ok) throw new Error('not recoverable');
+    const data = await resp.json();
+    const filename = (data.file_path || 'restored_file').split('\\').pop();
+    triggerBlobDownload(b64ToBlob(data.content_b64), filename);
+    if (btn) btn.textContent = '✓ Restored';
+  } catch (err) {
+    if (btn) btn.textContent = 'Unavailable';
+  } finally {
+    if (btn) setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  }
+}
+
+document.getElementById('restore-all-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('restore-all-btn');
+  const recoverable = EVENTS.filter(e => e.action === 'deleted' && e.recoverable);
+  if (!recoverable.length) {
+    btn.textContent = 'Nothing recoverable';
+    setTimeout(() => { btn.textContent = '📦 Restore All Recoverable'; }, 2000);
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = '📦 Zipping...';
+  const zip = new JSZip();
+  let ok = 0;
+  for (const ev of recoverable) {
+    try {
+      const resp = await fetch(`${API_BASE}/api/fim/restore/${ev.id}`);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const filename = (data.file_path || `file_${ev.id}`).split('\\').pop();
+      const short = (ev.user || 'unknown').split('\\').pop();
+      zip.file(`${short}/${filename}`, b64ToBlob(data.content_b64));
+      ok++;
+    } catch (e) {}
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  triggerBlobDownload(blob, 'FIM_Restored_Deleted_Files.zip');
+  btn.textContent = `✓ Restored ${ok}`;
+  setTimeout(() => { btn.textContent = '📦 Restore All Recoverable'; btn.disabled = false; }, 2500);
+});
+
+loadFimEvents();
+setInterval(loadFimEvents, 30000);
+
 // ── Unified activity filtering (quick boxes + column filters + advanced panel) ─
 const ALL_ACTIONS = ['created', 'modified', 'renamed', 'moved', 'copied', 'deleted'];
 const ACTION_LABELS = { created: 'Created', modified: 'Modified', renamed: 'Renamed', moved: 'Moved', copied: 'Copied', deleted: 'Deleted' };
 
-const ALL_ROWS = Array.from(document.querySelectorAll('#activity-table tbody tr'));
-const ALL_USERS = [...new Set(ALL_ROWS.map(r => r.dataset.user))].sort();
-const ALL_MACHINES = [...new Set(ALL_ROWS.map(r => r.dataset.machine))].sort();
-
 // Each dimension is either null (no restriction) or a Set of allowed values.
 const filters = { actions: null, users: null, machines: null, timeFrom: null, timeTo: null };
+
+function currentRows() { return Array.from(document.querySelectorAll('#activity-table tbody tr')); }
 
 function rowMatchesFilters(row) {
   if (filters.actions && !filters.actions.has(row.dataset.action)) return false;
@@ -609,8 +709,9 @@ function isAnyFilterActive() {
 }
 
 function applyFilters() {
+  const rows = currentRows();
   let visibleCount = 0;
-  ALL_ROWS.forEach(row => {
+  rows.forEach(row => {
     const match = rowMatchesFilters(row);
     row.hidden = !match;
     if (match) visibleCount++;
@@ -621,15 +722,13 @@ function applyFilters() {
 
   const indicator = document.getElementById('filter-indicator');
   indicator.style.display = active ? 'inline' : 'none';
-  document.getElementById('filter-indicator-text').textContent = active ? `Showing ${visibleCount} of ${ALL_ROWS.length}` : '';
+  document.getElementById('filter-indicator-text').textContent = active ? `Showing ${visibleCount} of ${rows.length}` : '';
 
-  // Reflect state on column header filter icons
   document.querySelectorAll('.col-filter-btn').forEach(btn => {
     const dim = btn.dataset.col === 'action' ? filters.actions : btn.dataset.col === 'user' ? filters.users : filters.machines;
     btn.classList.toggle('active', !!dim);
   });
 
-  // Reflect state on quick filter boxes (only "on" when it's an exact single-action match with nothing else active)
   document.querySelectorAll('.filter-box').forEach(box => {
     const boxActions = new Set(box.dataset.filter.split(','));
     const isExactMatch = filters.actions && filters.actions.size === boxActions.size &&
@@ -702,9 +801,12 @@ afBtn.addEventListener('click', () => {
   closeColFilterPopover();
   afPanel.hidden = !afPanel.hidden;
   if (opening) {
+    const rows = currentRows();
+    const users = [...new Set(rows.map(r => r.dataset.user))].sort();
+    const machines = [...new Set(rows.map(r => r.dataset.machine))].sort();
     buildCheckList('af-actions', ALL_ACTIONS, a => ACTION_LABELS[a], filters.actions);
-    buildCheckList('af-users', ALL_USERS, u => u, filters.users);
-    buildCheckList('af-machines', ALL_MACHINES, m => m, filters.machines);
+    buildCheckList('af-users', users, u => u, filters.users);
+    buildCheckList('af-machines', machines, m => m, filters.machines);
     document.getElementById('af-time-from').value = filters.timeFrom || '';
     document.getElementById('af-time-to').value = filters.timeTo || '';
   }
@@ -733,9 +835,13 @@ document.getElementById('af-apply').addEventListener('click', () => {
   const timeFrom = document.getElementById('af-time-from').value;
   const timeTo = document.getElementById('af-time-to').value;
 
-  filters.actions = checkedActions.length < ALL_ACTIONS.length ? new Set(checkedActions) : null;
-  filters.users = checkedUsers.length < ALL_USERS.length ? new Set(checkedUsers) : null;
-  filters.machines = checkedMachines.length < ALL_MACHINES.length ? new Set(checkedMachines) : null;
+  const allActions = ALL_ACTIONS.length;
+  const allUsers = document.querySelectorAll('#af-users input').length;
+  const allMachines = document.querySelectorAll('#af-machines input').length;
+
+  filters.actions = checkedActions.length < allActions ? new Set(checkedActions) : null;
+  filters.users = checkedUsers.length < allUsers ? new Set(checkedUsers) : null;
+  filters.machines = checkedMachines.length < allMachines ? new Set(checkedMachines) : null;
   filters.timeFrom = timeFrom ? timeFrom + ':00' : null;
   filters.timeTo = timeTo ? timeTo + ':59' : null;
 
@@ -745,7 +851,7 @@ document.getElementById('af-apply').addEventListener('click', () => {
 
 // ── Excel-style per-column header filter dropdown ─────────────────────────
 const colFilterPopover = document.getElementById('col-filter-popover');
-let colFilterTarget = null; // { dim: 'actions'|'users'|'machines', values: string[] }
+let colFilterTarget = null; // { dim: 'actions'|'users'|'machines' }
 
 function closeColFilterPopover() {
   colFilterPopover.hidden = true;
@@ -756,7 +862,10 @@ function openColFilterPopover(btn) {
   afPanel.hidden = true;
   const col = btn.dataset.col;
   const dim = col === 'action' ? 'actions' : col === 'user' ? 'users' : 'machines';
-  const allValues = dim === 'actions' ? ALL_ACTIONS : dim === 'users' ? ALL_USERS : ALL_MACHINES;
+  const rows = currentRows();
+  const allValues = dim === 'actions' ? ALL_ACTIONS
+    : dim === 'users' ? [...new Set(rows.map(r => r.dataset.user))].sort()
+    : [...new Set(rows.map(r => r.dataset.machine))].sort();
   const labelFn = dim === 'actions' ? (v => ACTION_LABELS[v]) : (v => v);
   colFilterTarget = { dim };
 
@@ -843,343 +952,6 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !colFilterPopover.hidden) closeColFilterPopover();
-});
-
-// ── Restore deleted files as a ZIP, organized by AD user folder ──────────
-function shortUserFolder(adUser) {
-  // "AzureAD\DebasishLenka" -> "DebasishLenka", "CORP\jsmith" -> "jsmith"
-  return adUser.split('\\').pop();
-}
-
-function triggerBlobDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-// Builds <ADUserShortName>/<filename> inside the zip for each fileId, using
-// each file's last known content (the version right before/at deletion).
-async function buildRestoreZip(fileIds) {
-  const zip = new JSZip();
-  fileIds.forEach(fileId => {
-    const file = FILE_HISTORY[fileId];
-    const last = file.versions[file.versions.length - 1];
-    const filename = file.path.split('\\').pop();
-    const folder = shortUserFolder(last.owner);
-    zip.file(`${folder}/${filename}`, last.lines.join('\r\n'));
-  });
-  return zip.generateAsync({ type: 'blob' });
-}
-
-// Single-file restore (used by the modal's Restore button and inline row Download buttons)
-async function downloadLatestVersion(fileId) {
-  const file = FILE_HISTORY[fileId];
-  const filename = file.path.split('\\').pop();
-  const blob = await buildRestoreZip([fileId]);
-  triggerBlobDownload(blob, `${filename}.zip`);
-  return filename;
-}
-
-// Bulk restore — every file currently in a "deleted" state, one file per AD-user folder
-function allDeletedFileIds() {
-  return Object.keys(FILE_HISTORY).filter(id => {
-    const versions = FILE_HISTORY[id].versions;
-    return versions[versions.length - 1].event === 'deleted';
-  });
-}
-
-async function restoreAllDeletedFiles() {
-  const ids = allDeletedFileIds();
-  const blob = await buildRestoreZip(ids);
-  triggerBlobDownload(blob, 'FIM_Restored_Deleted_Files.zip');
-  return ids.length;
-}
-
-document.getElementById('restore-all-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('restore-all-btn');
-  const orig = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '📦 Zipping...';
-  const count = await restoreAllDeletedFiles();
-  btn.textContent = `✓ Restored ${count} files`;
-  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
-});
-
-document.querySelectorAll('.row-download-btn').forEach(btn => {
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Zipping...';
-    await downloadLatestVersion(btn.dataset.fileId);
-    btn.textContent = '✓ Downloaded';
-    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
-  });
-});
-
-// ── File history modal ────────────────────────────────────────────────────
-const FILE_HISTORY = {
-  'f-testfile-pdf': {
-    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pdf',
-    versions: [
-      { time: '9/3/2026, 1:15:51 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
-        lines: ['PROJECT NOTES', 'Status: Draft', 'Owner: Debasish', 'Details: Initial outline, not yet reviewed.'] },
-      { time: '9/3/2026, 1:15:52 PM', event: 'modified', owner: 'AzureAD\\DebasishLenka',
-        lines: ['PROJECT NOTES', 'Status: FINAL', 'Owner: Debasish', 'Details: Reviewed and approved by team lead. Ready for submission.'] },
-      { time: '9/3/2026, 1:29:40 PM', event: 'deleted', owner: 'AzureAD\\DebasishLenka',
-        lines: ['PROJECT NOTES', 'Status: FINAL', 'Owner: Debasish', 'Details: Reviewed and approved by team lead. Ready for submission.'],
-        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pdf',
-        to: 'C:\\Users\\DebasishLenka\\ShadowArchive\\test_file.pdf' }
-    ]
-  },
-  'f-testfile-pptx': {
-    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_pptx_renamed.pptx',
-    versions: [
-      { time: '9/3/2026, 1:18:00 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
-        lines: ['Presentation: Q3 Kickoff', 'Slide 1: Agenda', 'Slide 2: Goals & Metrics'] },
-      { time: '9/3/2026, 1:29:39 PM', event: 'renamed', owner: 'AzureAD\\DebasishLenka',
-        lines: ['Presentation: Q3 Kickoff', 'Slide 1: Agenda', 'Slide 2: Goals & Metrics'],
-        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.pptx',
-        to: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_pptx_renamed.pptx' }
-    ]
-  },
-  'f-testfile-csv': {
-    path: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_csv_renamed.csv',
-    versions: [
-      { time: '9/3/2026, 1:19:10 PM', event: 'created', owner: 'AzureAD\\DebasishLenka',
-        lines: ['timestamp,event,host', '2026-09-03T13:00:00Z,logon,my-laptop'] },
-      { time: '9/3/2026, 1:29:39 PM', event: 'renamed', owner: 'AzureAD\\DebasishLenka',
-        lines: ['timestamp,event,host', '2026-09-03T13:00:00Z,logon,my-laptop'],
-        from: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file.csv',
-        to: 'C:\\Users\\DebasishLenka\\SecureWorkspace\\test_file_csv_renamed.csv' }
-    ]
-  },
-  'f-q3forecast': {
-    path: 'C:\\Users\\jsmith\\Finance\\Q3_forecast.xlsx',
-    versions: [
-      { time: '9/3/2026, 11:40:00 AM', event: 'created', owner: 'CORP\\jsmith',
-        lines: ['Q3 FORECAST', 'Revenue: $2.4M', 'Status: Draft'] },
-      { time: '9/3/2026, 12:50:00 PM', event: 'modified', owner: 'CORP\\jsmith',
-        lines: ['Q3 FORECAST', 'Revenue: $2.9M', 'Status: Final — submitted to finance'] },
-      { time: '9/3/2026, 1:12:04 PM', event: 'deleted', owner: 'CORP\\jsmith',
-        lines: ['Q3 FORECAST', 'Revenue: $2.9M', 'Status: Final — submitted to finance'],
-        from: 'C:\\Users\\jsmith\\Finance\\Q3_forecast.xlsx',
-        to: 'C:\\Users\\jsmith\\ShadowArchive\\Q3_forecast.xlsx' }
-    ]
-  },
-  'f-nda-vendor': {
-    path: 'C:\\Users\\alee\\Contracts\\NDA_vendor.docx',
-    versions: [
-      { time: '9/3/2026, 1:08:51 PM', event: 'created', owner: 'CORP\\alee',
-        lines: ['NON-DISCLOSURE AGREEMENT', 'Parties: Corp Inc. & Vendor LLC', 'Status: Draft — pending legal review'] }
-    ]
-  },
-  'f-headcount': {
-    path: 'C:\\Shares\\HR\\headcount_2026.xlsx',
-    versions: [
-      { time: '9/3/2026, 10:00:00 AM', event: 'created', owner: 'CORP\\bwilliams',
-        lines: ['HEADCOUNT 2026', 'Engineering: 42', 'Sales: 18'] },
-      { time: '9/3/2026, 12:57:22 PM', event: 'modified', owner: 'CORP\\bwilliams',
-        lines: ['HEADCOUNT 2026', 'Engineering: 47', 'Sales: 21'] }
-    ]
-  },
-  'f-invoice419': {
-    path: 'C:\\Users\\jsmith\\Archive\\2026\\invoice_419.pdf',
-    versions: [
-      { time: '9/2/2026, 4:00:00 PM', event: 'created', owner: 'CORP\\jsmith',
-        lines: ['INVOICE #419', 'Amount: $1,240.00', 'Status: Unpaid'] },
-      { time: '9/3/2026, 12:44:10 PM', event: 'moved', owner: 'CORP\\jsmith',
-        lines: ['INVOICE #419', 'Amount: $1,240.00', 'Status: Unpaid'],
-        from: 'C:\\Users\\jsmith\\Desktop\\invoice_419.pdf',
-        to: 'C:\\Users\\jsmith\\Archive\\2026\\invoice_419.pdf' }
-    ]
-  },
-  'f-legalreview': {
-    path: 'C:\\Shares\\HR\\legal_review.docx',
-    versions: [
-      { time: '9/3/2026, 10:30:00 AM', event: 'created', owner: 'CORP\\bwilliams',
-        lines: ['LEGAL REVIEW NOTES', 'Case: Vendor Contract Dispute', 'Status: In review'] },
-      { time: '9/3/2026, 12:31:47 PM', event: 'deleted', owner: 'CORP\\bwilliams',
-        lines: ['LEGAL REVIEW NOTES', 'Case: Vendor Contract Dispute', 'Status: In review'],
-        from: 'C:\\Shares\\HR\\legal_review.docx',
-        to: 'C:\\Shares\\HR\\.shadowarchive\\legal_review.docx' }
-    ]
-  },
-  'f-msatemplate': {
-    path: 'C:\\Users\\alee\\Contracts\\2026\\msa_template.docx',
-    versions: [
-      { time: '8/15/2026, 9:00:00 AM', event: 'created', owner: 'CORP\\alee',
-        lines: ['MASTER SERVICES AGREEMENT TEMPLATE', 'Version: 3.2', 'Status: Approved template'] },
-      { time: '9/3/2026, 12:20:03 PM', event: 'copied', owner: 'CORP\\alee',
-        lines: ['MASTER SERVICES AGREEMENT TEMPLATE', 'Version: 3.2', 'Status: Approved template'],
-        from: 'C:\\Users\\alee\\Templates\\msa_template.docx',
-        to: 'C:\\Users\\alee\\Contracts\\2026\\msa_template.docx' }
-    ]
-  },
-  'f-weeklysummary': {
-    path: 'C:\\Users\\jsmith\\Reports\\weekly_summary.csv',
-    versions: [
-      { time: '9/3/2026, 12:05:18 PM', event: 'created', owner: 'CORP\\jsmith',
-        lines: ['WEEKLY SUMMARY', 'Week: 36', 'Status: Draft'] }
-    ]
-  }
-};
-
-const EVENT_BADGE_CLASS = { created: 'low', modified: 'medium', renamed: 'accent', moved: 'info', copied: 'neutral', deleted: 'critical' };
-
-let currentFileId = null;
-
-function diffLine(text, cls) {
-  const div = document.createElement('div');
-  div.className = cls ? `diff-line diff-${cls}` : 'diff-line';
-  div.textContent = (cls === 'removed' ? '- ' : cls === 'added' ? '+ ' : '  ') + text;
-  return div;
-}
-
-function renderPlainContent(lines) {
-  const container = document.getElementById('modal-diff-view');
-  container.innerHTML = '';
-  lines.forEach(l => container.appendChild(diffLine(l, null)));
-}
-
-function renderDiffContent(oldLines, newLines) {
-  const container = document.getElementById('modal-diff-view');
-  container.innerHTML = '';
-  const max = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < max; i++) {
-    const o = oldLines[i], n = newLines[i];
-    if (o !== undefined && n !== undefined) {
-      if (o === n) {
-        container.appendChild(diffLine(o, null));
-      } else {
-        container.appendChild(diffLine(o, 'removed'));
-        container.appendChild(diffLine(n, 'added'));
-      }
-    } else if (o !== undefined) {
-      container.appendChild(diffLine(o, 'removed'));
-    } else if (n !== undefined) {
-      container.appendChild(diffLine(n, 'added'));
-    }
-  }
-}
-
-function basenameOf(p) {
-  return p.split('\\').pop();
-}
-
-const CHANGE_INFO_LABELS = {
-  renamed: { verb: 'Renamed', fromLabel: 'Old name', toLabel: 'New name', pathFromLabel: 'Old path', pathToLabel: 'New path' },
-  moved:   { verb: 'Moved',   fromLabel: 'Old name', toLabel: 'New name', pathFromLabel: 'Moved from', pathToLabel: 'Moved to' },
-  copied:  { verb: 'Copied',  fromLabel: 'Source name', toLabel: 'Copy name', pathFromLabel: 'Copied from', pathToLabel: 'Copied to' },
-  deleted: { verb: 'Deleted', fromLabel: 'File name', toLabel: null, pathFromLabel: 'Original path', pathToLabel: 'Quarantined to' },
-};
-
-function renderChangeInfo(v) {
-  const note = document.getElementById('modal-diff-note');
-  if (!v.from || !v.to) { note.innerHTML = ''; return; }
-
-  const meta = CHANGE_INFO_LABELS[v.event];
-  const oldName = basenameOf(v.from);
-  const newName = basenameOf(v.to);
-  const nameChanged = oldName !== newName;
-
-  let html = `<div class="change-info"><div class="change-info-title">${meta.verb}</div>`;
-  if (nameChanged) {
-    html += `
-      <div class="change-info-row"><span class="change-info-label">${meta.fromLabel}:</span> <span class="mono">${oldName}</span></div>
-      <div class="change-info-row"><span class="change-info-label">${meta.toLabel}:</span> <span class="mono">${newName}</span></div>`;
-  }
-  html += `
-      <div class="change-info-row"><span class="change-info-label">${meta.pathFromLabel}:</span> <span class="mono">${v.from}</span></div>
-      <div class="change-info-row"><span class="change-info-label">${meta.pathToLabel}:</span> <span class="mono">${v.to}</span></div>
-    </div>`;
-  note.innerHTML = html;
-}
-
-function showVersion(fileId, index) {
-  const file = FILE_HISTORY[fileId];
-  const v = file.versions[index];
-  const prev = index > 0 ? file.versions[index - 1] : null;
-
-  renderChangeInfo(v);
-
-  if (v.event === 'deleted' || !prev) {
-    renderPlainContent(v.lines);
-  } else {
-    renderDiffContent(prev.lines, v.lines);
-  }
-}
-
-function openFileModal(fileId) {
-  const file = FILE_HISTORY[fileId];
-  if (!file) return;
-  currentFileId = fileId;
-  document.getElementById('modal-path').textContent = file.path;
-
-  const body = document.getElementById('modal-history-body');
-  body.innerHTML = '';
-  file.versions.forEach((v, i) => {
-    const tr = document.createElement('tr');
-    const label = v.event === 'deleted' ? 'preview content at deletion' : 'preview this version';
-    const tdTime = document.createElement('td'); tdTime.className = 'mono'; tdTime.textContent = v.time;
-    const tdEvent = document.createElement('td');
-    tdEvent.innerHTML = `<span class="badge badge-${EVENT_BADGE_CLASS[v.event] || 'neutral'}">${v.event}</span>`;
-    const tdOwner = document.createElement('td'); tdOwner.textContent = v.owner;
-    const tdBtn = document.createElement('td');
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-ghost btn-sm';
-    btn.textContent = label;
-    btn.addEventListener('click', () => showVersion(fileId, i));
-    tdBtn.appendChild(btn);
-    tr.append(tdTime, tdEvent, tdOwner, tdBtn);
-    body.appendChild(tr);
-  });
-
-  const last = file.versions[file.versions.length - 1];
-  document.getElementById('modal-restore-row').hidden = last.event !== 'deleted';
-  document.getElementById('modal-restore-note').textContent = '';
-
-  showVersion(fileId, file.versions.length - 1);
-  document.getElementById('file-modal').hidden = false;
-}
-
-function closeFileModal() {
-  document.getElementById('file-modal').hidden = true;
-  currentFileId = null;
-}
-
-document.querySelectorAll('#activity-table tbody tr[data-file-id]').forEach(row => {
-  row.addEventListener('click', () => openFileModal(row.dataset.fileId));
-});
-
-document.getElementById('modal-close').addEventListener('click', closeFileModal);
-document.getElementById('file-modal').addEventListener('click', (e) => {
-  if (e.target.id === 'file-modal') closeFileModal();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !document.getElementById('file-modal').hidden) closeFileModal();
-});
-
-document.getElementById('modal-restore-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('modal-restore-btn');
-  const note = document.getElementById('modal-restore-note');
-  btn.disabled = true;
-  note.textContent = 'Zipping file...';
-  note.classList.remove('ok');
-
-  const file = FILE_HISTORY[currentFileId];
-  const last = file.versions[file.versions.length - 1];
-  const folder = shortUserFolder(last.owner);
-  const filename = await downloadLatestVersion(currentFileId);
-
-  note.textContent = `Restored — saved to this machine's Downloads\\${filename}.zip (contains ${folder}\\${filename}).`;
-  note.classList.add('ok');
-  btn.disabled = false;
 });
 </script>
 </body>

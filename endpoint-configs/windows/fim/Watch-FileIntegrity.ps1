@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    SOC Lab File Integrity Monitor - endpoint watcher.
+    SOC Lab File Integrity Monitor - endpoint watcher (DLP-lite).
 .DESCRIPTION
     Watches the folders/extensions listed in fim-config.json for Created,
     Modified, Renamed/Moved and Deleted events using the native .NET
@@ -10,12 +10,33 @@
     to Vector, which tags it with a MITRE technique and indexes it into
     OpenSearch under soc-logs-*.
 
-    The admin can change watched_extensions (and other settings except
+    Beyond plain FIM, this script also:
+      - Keeps a content-addressed "shadow copy" of every watched file's bytes
+        (deduped by SHA256, size-capped) so a deleted file's last-known
+        content travels with its Deleted event and can be restored from the
+        SOC dashboard - the endpoint is never contacted after the fact, since
+        there is no inbound channel to it (outbound-only, by design).
+      - Extracts a bounded, human-readable content_preview at every event so
+        an analyst can see what is inside a file without downloading it.
+      - Correlates hashes to distinguish "copied" (same content now exists at
+        a second path while the original still exists) and cross-directory
+        "moved" (a delete followed shortly by a create with the same hash)
+        from genuinely new files - FileSystemWatcher itself cannot tell these
+        apart, so this is a heuristic, not forensic proof.
+
+    The admin can change watched_extensions (and most other settings except
     watch_paths) in fim-config.json at any time - this script re-reads the
     file every config_reload_seconds without needing a restart.
 
-    LIMITATION: FileSystemWatcher cannot distinguish "copied" from "created"
-    (both raise a Created event) - copies are logged as "created".
+    KNOWN LIMITATIONS (see README.md):
+      - Content preview for .pdf and .zip is not full-text (PDF has no plain
+        text layer without a parser this script doesn't carry; .zip lists
+        entry names only). .docx/.xlsx/.pptx/.csv/.txt get real text.
+      - The copy/move hash correlation is heuristic: two unrelated files that
+        happen to share identical content will look like a copy.
+      - The in-memory known-file map is rebuilt via a startup baseline scan,
+        so path history from *before* this run only goes as deep as that scan
+        (it hashes and shadow-copies every existing watched file once).
 .PARAMETER ConfigPath
     Path to fim-config.json. Defaults to the copy next to this script.
 .NOTES
@@ -42,10 +63,129 @@ $global:FimMachine    = $env:COMPUTERNAME
 
 New-Item -ItemType Directory -Force -Path (Split-Path $global:FimConfig.log_path) | Out-Null
 
+# path -> sha256 of last-known content, for copy/move correlation and rekeying on rename.
+$global:FimKnownFiles = @{}
+# ring buffer of recently deleted files: [{ hash, path, time }], pruned by the
+# configured correlation window - lets a delete+create pair on two different
+# watched roots be recognised as one cross-directory "moved" event.
+$global:FimRecentDeletes = New-Object System.Collections.ArrayList
+
+function global:Get-FimShadowDir {
+    if ($global:FimConfig.shadow_copy -and $global:FimConfig.shadow_copy.enabled) {
+        $dir = $global:FimConfig.shadow_copy.path
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        return $dir
+    }
+    return $null
+}
+
+function global:Get-FimFileHashSafe {
+    param([string]$Path)
+    for ($i = 0; $i -lt 3; $i++) {
+        try { return (Get-FileHash -Path $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant() }
+        catch { Start-Sleep -Milliseconds 150 }
+    }
+    return $null
+}
+
+# Copies $Path into the content-addressed shadow store (skipped if the hash is
+# already stored, or the file is over shadow_copy.max_file_mb). Returns $true
+# if a usable shadow copy now exists for this hash.
+function global:Backup-FimShadowCopy {
+    param([string]$Path, [string]$Hash)
+    $shadowDir = Get-FimShadowDir
+    if (-not $shadowDir -or -not $Hash) { return $false }
+
+    $dest = Join-Path $shadowDir $Hash
+    if (Test-Path $dest) { return $true }
+
+    $maxMb = if ($global:FimConfig.shadow_copy.max_file_mb) { [int]$global:FimConfig.shadow_copy.max_file_mb } else { 20 }
+    try {
+        $size = (Get-Item -LiteralPath $Path -ErrorAction Stop).Length
+        if ($size -gt ($maxMb * 1MB)) { return $false }
+        Copy-Item -LiteralPath $Path -Destination $dest -Force -ErrorAction Stop
+        Invoke-FimShadowStorePrune
+        return $true
+    } catch { return $false }
+}
+
+# Simple size cap on the whole shadow store - evicts oldest-accessed copies
+# first once over max_store_mb. Best-effort; never blocks event forwarding.
+function global:Invoke-FimShadowStorePrune {
+    try {
+        $shadowDir = Get-FimShadowDir
+        if (-not $shadowDir) { return }
+        $maxMb = if ($global:FimConfig.shadow_copy.max_store_mb) { [int]$global:FimConfig.shadow_copy.max_store_mb } else { 2048 }
+        $files = Get-ChildItem -Path $shadowDir -File -ErrorAction SilentlyContinue | Sort-Object LastAccessTime
+        $totalMb = ($files | Measure-Object Length -Sum).Sum / 1MB
+        foreach ($f in $files) {
+            if ($totalMb -le $maxMb) { break }
+            $totalMb -= ($f.Length / 1MB)
+            Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
+}
+
 function global:Test-FimWatchedExtension {
     param([string]$Path)
     $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
     return $global:FimConfig.watched_extensions -contains $ext
+}
+
+# Extracts a bounded, human-readable preview so an analyst can see what is
+# inside a file without downloading it. Office formats are zip containers -
+# their XML text parts are pulled and tag-stripped. PDF/zip get a best-effort
+# fallback, not full text (see README limitations).
+function global:Get-FimContentPreview {
+    param([string]$SourcePath, [string]$Ext)
+    if (-not ($global:FimConfig.content_preview -and $global:FimConfig.content_preview.enabled)) { return $null }
+    $maxChars = if ($global:FimConfig.content_preview.max_chars) { [int]$global:FimConfig.content_preview.max_chars } else { 4000 }
+
+    try {
+        switch ($Ext) {
+            { $_ -in ".txt", ".csv" } {
+                $text = Get-Content -LiteralPath $SourcePath -Raw -ErrorAction Stop
+                return $text.Substring(0, [Math]::Min($text.Length, $maxChars))
+            }
+            { $_ -in ".docx", ".xlsx", ".pptx" } {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($SourcePath)
+                try {
+                    $xmlEntries = switch ($Ext) {
+                        ".docx" { $zip.Entries | Where-Object { $_.FullName -eq "word/document.xml" } }
+                        ".pptx" { $zip.Entries | Where-Object { $_.FullName -like "ppt/slides/slide*.xml" } | Sort-Object FullName }
+                        ".xlsx" { $zip.Entries | Where-Object { $_.FullName -like "xl/worksheets/sheet*.xml" -or $_.FullName -eq "xl/sharedStrings.xml" } | Sort-Object FullName }
+                    }
+                    $sb = New-Object System.Text.StringBuilder
+                    foreach ($entry in $xmlEntries) {
+                        if ($sb.Length -ge $maxChars) { break }
+                        $reader = New-Object System.IO.StreamReader($entry.Open())
+                        try {
+                            $xml = $reader.ReadToEnd()
+                            $text = [regex]::Replace($xml, '<[^>]+>', ' ')
+                            $text = [regex]::Replace($text, '\s+', ' ').Trim()
+                            [void]$sb.Append($text).Append(' ')
+                        } finally { $reader.Dispose() }
+                    }
+                    $out = $sb.ToString()
+                    return $out.Substring(0, [Math]::Min($out.Length, $maxChars))
+                } finally { $zip.Dispose() }
+            }
+            ".zip" {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($SourcePath)
+                try {
+                    $names = $zip.Entries | Select-Object -First 25 -ExpandProperty FullName
+                    return "[zip archive - $($zip.Entries.Count) entries] " + ($names -join ', ')
+                } finally { $zip.Dispose() }
+            }
+            default {
+                return "[binary content - text preview not available for $Ext in this lab build; use restore to recover the exact original bytes]"
+            }
+        }
+    } catch {
+        return "[preview unavailable - file may have been locked or changed mid-read]"
+    }
 }
 
 function global:Send-FimEvent {
@@ -56,15 +196,93 @@ function global:Send-FimEvent {
     )
     if (-not (Test-FimWatchedExtension -Path $FullPath)) { return }
 
-    $evt = [ordered]@{
-        "@timestamp" = (Get-Date).ToUniversalTime().ToString("o")
-        action       = $Action
-        user         = $global:FimIdentity
-        machine      = $global:FimMachine
-        file_path    = $FullPath
-        destination  = $Destination
+    $ext           = [System.IO.Path]::GetExtension($FullPath).ToLowerInvariant()
+    $hash          = $null
+    $sizeBytes     = $null
+    $preview       = $null
+    $recoverable   = $false
+    $contentB64    = $null
+    $shadowStored  = $false
+    $correlation   = $null
+    $correlatedAct = $Action
+
+    if ($Action -eq "deleted") {
+        # File is already gone - fall back to what we knew about it a moment
+        # ago (from the startup baseline scan or a prior create/modify), which
+        # is also our only chance at a recovery copy.
+        if ($global:FimKnownFiles.ContainsKey($FullPath)) {
+            $hash = $global:FimKnownFiles[$FullPath]
+            $global:FimKnownFiles.Remove($FullPath)
+        }
+        if ($hash) {
+            $shadowDir = Get-FimShadowDir
+            $shadowFile = if ($shadowDir) { Join-Path $shadowDir $hash } else { $null }
+            if ($shadowFile -and (Test-Path $shadowFile)) {
+                $shadowStored = $true
+                $preview = Get-FimContentPreview -SourcePath $shadowFile -Ext $ext
+                try {
+                    $bytes = [System.IO.File]::ReadAllBytes($shadowFile)
+                    $contentB64 = [System.Convert]::ToBase64String($bytes)
+                    $recoverable = $true
+                } catch {}
+            }
+            # Feed the correlation window so a create elsewhere with the same
+            # hash within the window is recognised as a cross-directory move.
+            [void]$global:FimRecentDeletes.Add(@{ hash = $hash; path = $FullPath; time = Get-Date })
+        }
     }
-    $json = $evt | ConvertTo-Json -Compress
+    else {
+        $hash = Get-FimFileHashSafe -Path $FullPath
+        if ($hash) {
+            try { $sizeBytes = (Get-Item -LiteralPath $FullPath -ErrorAction Stop).Length } catch {}
+            $shadowStored = Backup-FimShadowCopy -Path $FullPath -Hash $hash
+            $preview = Get-FimContentPreview -SourcePath $FullPath -Ext $ext
+            $recoverable = $shadowStored
+
+            if ($Action -eq "created") {
+                # Prune the correlation window to the configured age first.
+                $windowSec = if ($global:FimConfig.move_correlation_window_seconds) { [int]$global:FimConfig.move_correlation_window_seconds } else { 30 }
+                $cutoff = (Get-Date).AddSeconds(-$windowSec)
+                for ($i = $global:FimRecentDeletes.Count - 1; $i -ge 0; $i--) {
+                    if ($global:FimRecentDeletes[$i].time -lt $cutoff) { $global:FimRecentDeletes.RemoveAt($i) }
+                }
+
+                $moveMatch = $global:FimRecentDeletes | Where-Object { $_.hash -eq $hash } | Select-Object -First 1
+                if ($moveMatch) {
+                    $correlatedAct = "moved"
+                    $correlation = $moveMatch.path
+                    $global:FimRecentDeletes.Remove($moveMatch)
+                }
+                else {
+                    $copyMatch = $global:FimKnownFiles.GetEnumerator() |
+                        Where-Object { $_.Value -eq $hash -and $_.Key -ne $FullPath -and (Test-Path -LiteralPath $_.Key) } |
+                        Select-Object -First 1
+                    if ($copyMatch) {
+                        $correlatedAct = "copied"
+                        $correlation = $copyMatch.Key
+                    }
+                }
+            }
+            $global:FimKnownFiles[$FullPath] = $hash
+        }
+    }
+
+    if ($Destination -and -not $correlation) { $correlation = $Destination }
+
+    $evt = [ordered]@{
+        "@timestamp"      = (Get-Date).ToUniversalTime().ToString("o")
+        action            = $correlatedAct
+        user              = $global:FimIdentity
+        machine           = $global:FimMachine
+        file_path         = $FullPath
+        destination       = $correlation
+        file_hash         = $hash
+        file_size         = $sizeBytes
+        content_preview   = $preview
+        recoverable       = $recoverable
+        content_b64       = $contentB64
+    }
+    $json = $evt | ConvertTo-Json -Compress -Depth 4
 
     try { Add-Content -Path $global:FimConfig.log_path -Value $json } catch {}
 
@@ -82,6 +300,29 @@ function global:Send-FimEvent {
         }
     }
 }
+
+# -- Baseline scan: hash + shadow-copy every watched file that already exists
+#    on disk, so deletions of pre-existing files are recoverable too, not only
+#    files created after this watcher started. Best-effort, skips unreadable
+#    files silently (locked, permission-denied, etc.).
+function global:Invoke-FimBaselineScan {
+    foreach ($rawPath in $global:FimConfig.watch_paths) {
+        $path = [System.Environment]::ExpandEnvironmentVariables($rawPath)
+        if (-not (Test-Path $path)) { continue }
+        $opts = @{ Path = $path; File = $true; ErrorAction = "SilentlyContinue" }
+        if ($global:FimConfig.include_subdirectories) { $opts.Recurse = $true }
+        Get-ChildItem @opts | Where-Object { Test-FimWatchedExtension -Path $_.FullName } | ForEach-Object {
+            $hash = Get-FimFileHashSafe -Path $_.FullName
+            if ($hash) {
+                $global:FimKnownFiles[$_.FullName] = $hash
+                Backup-FimShadowCopy -Path $_.FullName -Hash $hash | Out-Null
+            }
+        }
+    }
+    Write-Host "Baseline scan complete: $($global:FimKnownFiles.Count) existing watched file(s) hashed."
+}
+
+Invoke-FimBaselineScan
 
 # -- Set up one FileSystemWatcher per configured path --------------------------
 $global:FimWatchers = @()
@@ -114,6 +355,10 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
         $old = $Event.SourceEventArgs.OldFullPath
         $new = $Event.SourceEventArgs.FullPath
         $action = if ([System.IO.Path]::GetDirectoryName($old) -eq [System.IO.Path]::GetDirectoryName($new)) { "renamed" } else { "moved" }
+        if ($global:FimKnownFiles.ContainsKey($old)) {
+            $global:FimKnownFiles[$new] = $global:FimKnownFiles[$old]
+            $global:FimKnownFiles.Remove($old)
+        }
         Send-FimEvent -Action $action -FullPath $new -Destination $old
     } | Out-Null
 

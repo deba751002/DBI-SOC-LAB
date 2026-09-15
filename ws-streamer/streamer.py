@@ -233,6 +233,7 @@ ZEEK_NOTICE_FILTER = ZEEK_FILTER + [{"exists": {"field": "note"}}]
 ZEEK_LLMNR_FILTER  = ZEEK_DNS_FILTER + [{"terms": {"id.resp_p": [5355, 137]}}]
 
 WAZUH_FILTER = [{"term": {"log_type.keyword": "wazuh"}}]
+FIM_FILTER = [{"term": {"log_type.keyword": "file_integrity"}}]
 WAZUH_FIM_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "syscheck"}}]
 WAZUH_VULN_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "vulnerability-detector"}}]
 
@@ -690,6 +691,80 @@ async def handle_wazuh_vulnerabilities(request):
         "medium": by_sev["medium"], "low": by_sev["low"],
         "total": sum(by_sev.values()),
         "findings": findings,
+    })
+
+
+async def handle_fim_events(request):
+    """Real events from the custom PowerShell FIM/DLP-lite watcher (see
+    endpoint-configs/windows/fim/) - not Wazuh syscheck. content_b64 is
+    deliberately omitted from the feed (only carried on the deleted event
+    itself server-side) to keep this list light; use /api/fim/restore/{id}
+    to pull the recoverable bytes for one specific event."""
+    client = get_os_client()
+
+    def count(extra_filt):
+        return client.count(index="soc-logs-*", body={
+            "query": {"bool": {"filter": FIM_FILTER + extra_filt}}
+        })["count"]
+
+    by_action = {
+        action: count([{"term": {"action.keyword": action}}])
+        for action in ("created", "modified", "renamed", "moved", "copied", "deleted")
+    }
+
+    resp = client.search(index="soc-logs-*", body={
+        "query": {"bool": {"filter": FIM_FILTER}},
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "size": min(int(request.query.get("limit", 100)), 300),
+    })
+    events = []
+    machines, users = set(), set()
+    for h in resp["hits"]["hits"]:
+        s = h["_source"]
+        machines.add(s.get("machine", ""))
+        users.add(s.get("user", ""))
+        events.append({
+            "id": h["_id"],
+            "time": s.get("@timestamp"),
+            "action": s.get("action"),
+            "user": s.get("user"),
+            "machine": s.get("machine"),
+            "file_path": s.get("file_path"),
+            "destination": s.get("destination"),
+            "file_hash": s.get("file_hash"),
+            "file_size": s.get("file_size"),
+            "content_preview": s.get("content_preview"),
+            "recoverable": bool(s.get("recoverable")),
+            "raw": {k: v for k, v in s.items() if k != "content_b64"},
+        })
+
+    return web.json_response({
+        "by_action": by_action,
+        "total": sum(by_action.values()),
+        "machines": sorted(m for m in machines if m),
+        "users": sorted(u for u in users if u),
+        "events": events,
+    })
+
+
+async def handle_fim_restore(request):
+    """Returns the recoverable content (base64) for one FIM event by its
+    OpenSearch _id - used by the dashboard's Restore/Download button. Only
+    populated on 'deleted' events where the endpoint's shadow-copy store still
+    held the file at delete time (see recoverable flag on the event)."""
+    doc_id = request.match_info["id"]
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={"query": {"ids": {"values": [doc_id]}}})
+    hits = resp["hits"]["hits"]
+    if not hits:
+        return web.json_response({"error": "not found"}, status=404)
+    s = hits[0]["_source"]
+    if not s.get("content_b64"):
+        return web.json_response({"error": "no recoverable content for this event"}, status=404)
+    return web.json_response({
+        "file_path": s.get("file_path"),
+        "file_hash": s.get("file_hash"),
+        "content_b64": s.get("content_b64"),
     })
 
 
@@ -1639,6 +1714,8 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/vulnerabilities", handle_wazuh_vulnerabilities)
     app.router.add_get("/api/wazuh/sca", handle_wazuh_sca)
     app.router.add_get("/api/wazuh/active-response", handle_wazuh_active_response)
+    app.router.add_get("/api/fim/events", handle_fim_events)
+    app.router.add_get("/api/fim/restore/{id}", handle_fim_restore)
     app.router.add_get("/api/ai/health", handle_ai_health)
     app.router.add_get("/api/ai/ollama_model", handle_ai_ollama_model)
     app.router.add_get("/api/ai/jobs", handle_ai_jobs)

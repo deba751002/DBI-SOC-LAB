@@ -13,5 +13,16 @@
     "enabled": true,
     "host": "vector.soc.lab",
     "port": 6005
-  }
+  },
+  "shadow_copy": {
+    "enabled": true,
+    "path": "C:\\ProgramData\\SOCLab\\FIM\\ShadowCopies",
+    "max_file_mb": 20,
+    "max_store_mb": 2048
+  },
+  "content_preview": {
+    "enabled": true,
+    "max_chars": 4000
+  },
+  "move_correlation_window_seconds": 30
 }
