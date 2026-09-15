@@ -978,6 +978,16 @@ services:
       #   docker exec soc-wazuh-manager /var/ossec/bin/wazuh-control restart
       # It only pushes shared group policy to agents, not required for
       # basic enrollment/log ingestion.
+      #
+      # Same story for the manager's own /var/ossec/etc/ossec.conf: it's
+      # edited in place inside the running container (vulnerability-detector
+      # enabled, scoped to only the OS providers this lab's real agents
+      # actually need - canonical/Ubuntu for the manager's own agent, msu/
+      # Windows for the real enrolled laptop, plus the aggregate nvd feed).
+      # That edit lives only in the container's writable layer and is lost
+      # on recreate - redeploy it with:
+      #   docker cp config/wazuh/ossec.conf soc-wazuh-manager:/var/ossec/etc/ossec.conf
+      #   docker exec soc-wazuh-manager /var/ossec/bin/wazuh-control restart
     networks:
       soc-net: { ipv4_address: 172.20.0.130 }
     logging: *logging
