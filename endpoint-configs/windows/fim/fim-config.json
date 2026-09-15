@@ -24,5 +24,6 @@
     "enabled": true,
     "max_chars": 4000
   },
-  "move_correlation_window_seconds": 30
+  "move_correlation_window_seconds": 30,
+  "reconciliation_scan_seconds": 120
 }

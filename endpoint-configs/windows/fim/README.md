@@ -62,6 +62,28 @@ top to approximate what's needed:
   `.pdf`) falls back to a placeholder — this build has no PDF text-layer
   parser, so a PDF's exact content can only be recovered via download/restore,
   not previewed inline.
+- **Periodic reconciliation scan** (`reconciliation_scan_seconds`, default
+  120s): `FileSystemWatcher`'s real-time notifications can be silently
+  suppressed by things entirely outside this script's control — observed in
+  real endpoint testing, an org-managed antivirus/EDR's filesystem filter
+  driver occasionally swallowed change notifications with no error raised
+  anywhere, no exception to catch, nothing. Rather than trust real-time
+  delivery alone, the watcher periodically re-walks every watched path and
+  diffs against last-known state (skipping the hash check entirely for files
+  whose size+mtime haven't changed, to keep this cheap), generating the exact
+  same created/modified/deleted events - with the same hash correlation,
+  shadow copy and content preview - that the real-time watcher would have
+  produced. A missed real-time notification is caught within one
+  reconciliation interval instead of never. This mirrors why Wazuh's own FIM
+  module (`syscheck`) pairs real-time watching with a periodic full scan
+  rather than relying on real-time delivery by itself.
+- **Diagnostics** (`fim-diag.log`, next to `fim-events.log`): records every
+  raw `FileSystemWatcher` event as it fires (before any of this script's own
+  logic runs) and any exception caught from inside an event handler -
+  `Register-ObjectEvent` action scriptblocks fail completely silently
+  otherwise (their errors land in a background `PSEventJob` nobody
+  inspects), which made a real reliability issue undiagnosable until this
+  was added.
 
 **Honesty about limitations — this is heuristic, not forensic-grade:**
 
@@ -151,7 +173,8 @@ watcher itself only ever makes outbound connections to Vector.
   "forward_to_vector": { "enabled": true, "host": "vector.soc.lab", "port": 6005 },
   "shadow_copy": { "enabled": true, "path": "C:\\ProgramData\\SOCLab\\FIM\\ShadowCopies", "max_file_mb": 20, "max_store_mb": 2048 },
   "content_preview": { "enabled": true, "max_chars": 4000 },
-  "move_correlation_window_seconds": 30
+  "move_correlation_window_seconds": 30,
+  "reconciliation_scan_seconds": 120
 }
 ```
 

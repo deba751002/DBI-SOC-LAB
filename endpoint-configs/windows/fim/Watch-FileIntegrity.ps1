@@ -65,6 +65,11 @@ New-Item -ItemType Directory -Force -Path (Split-Path $global:FimConfig.log_path
 
 # path -> sha256 of last-known content, for copy/move correlation and rekeying on rename.
 $global:FimKnownFiles = @{}
+# path -> "size|mtime-ticks" cheap fingerprint, used only by the periodic
+# reconciliation scan (below) to skip re-hashing files that plainly haven't
+# changed. Kept separate from FimKnownFiles so the correlation logic that
+# already depends on FimKnownFiles is untouched.
+$global:FimKnownMeta = @{}
 # ring buffer of recently deleted files: [{ hash, path, time }], pruned by the
 # configured correlation window - lets a delete+create pair on two different
 # watched roots be recognised as one cross-directory "moved" event.
@@ -329,11 +334,70 @@ function global:Invoke-FimBaselineScan {
             $hash = Get-FimFileHashSafe -Path $_.FullName
             if ($hash) {
                 $global:FimKnownFiles[$_.FullName] = $hash
+                $global:FimKnownMeta[$_.FullName] = "$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
                 Backup-FimShadowCopy -Path $_.FullName -Hash $hash | Out-Null
             }
         }
     }
     Write-Host "Baseline scan complete: $($global:FimKnownFiles.Count) existing watched file(s) hashed."
+}
+
+# -- Periodic reconciliation scan ----------------------------------------------
+# FileSystemWatcher's real-time notifications can be silently suppressed by
+# things outside this script's control (observed in practice: an org-managed
+# antivirus/EDR's filesystem filter driver occasionally swallows
+# ReadDirectoryChangesW notifications with no error, no exception, nothing to
+# catch - the .NET event simply never fires). Rather than depend entirely on
+# real-time delivery, this periodically re-walks every watched path and diffs
+# against known state, generating the exact same create/modified/deleted
+# events (with the same hash correlation, shadow copy and content preview)
+# that the real-time watcher would have - so a missed real-time notification
+# is caught within one reconciliation interval instead of never. This mirrors
+# why Wazuh's own FIM module pairs real-time watching with a periodic full
+# scan rather than trusting real-time delivery alone.
+function global:Invoke-FimReconciliationScan {
+    $current = New-Object System.Collections.Generic.HashSet[string]
+
+    foreach ($rawPath in $global:FimConfig.watch_paths) {
+        $path = [System.Environment]::ExpandEnvironmentVariables($rawPath)
+        if (-not (Test-Path $path)) { continue }
+        $opts = @{ Path = $path; File = $true; ErrorAction = "SilentlyContinue" }
+        if ($global:FimConfig.include_subdirectories) { $opts.Recurse = $true }
+
+        Get-ChildItem @opts | Where-Object { Test-FimWatchedExtension -Path $_.FullName } | ForEach-Object {
+            $fp = $_.FullName
+            [void]$current.Add($fp)
+
+            $meta = "$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
+            if ($global:FimKnownMeta[$fp] -eq $meta) { return }  # unchanged since we last looked - skip re-hashing
+
+            $hash = Get-FimFileHashSafe -Path $fp
+            if (-not $hash) { return }
+            $global:FimKnownMeta[$fp] = $meta
+
+            if (-not $global:FimKnownFiles.ContainsKey($fp)) {
+                Write-FimDiag "RECONCILE: new file the real-time watcher missed - $fp"
+                try { Send-FimEvent -Action "created" -FullPath $fp }
+                catch { Write-FimDiag "ERROR in reconcile (created) for $fp : $($_.Exception.Message)" }
+            }
+            elseif ($global:FimKnownFiles[$fp] -ne $hash) {
+                Write-FimDiag "RECONCILE: modified file the real-time watcher missed - $fp"
+                try { Send-FimEvent -Action "modified" -FullPath $fp }
+                catch { Write-FimDiag "ERROR in reconcile (modified) for $fp : $($_.Exception.Message)" }
+            }
+        }
+    }
+
+    # Anything we knew about that no longer shows up anywhere in watch_paths
+    # was deleted - and if the real-time Deleted handler already caught it,
+    # it's already gone from FimKnownFiles, so this naturally never double-fires.
+    $missing = @($global:FimKnownFiles.Keys) | Where-Object { -not $current.Contains($_) }
+    foreach ($fp in $missing) {
+        Write-FimDiag "RECONCILE: deleted file the real-time watcher missed - $fp"
+        try { Send-FimEvent -Action "deleted" -FullPath $fp }
+        catch { Write-FimDiag "ERROR in reconcile (deleted) for $fp : $($_.Exception.Message)" }
+        $global:FimKnownMeta.Remove($fp)
+    }
 }
 
 Invoke-FimBaselineScan
@@ -419,9 +483,10 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
 
 Write-Host "SOC Lab FIM watcher running. Watched types: $($global:FimConfig.watched_extensions -join ', ')"
 
-# -- Idle loop: keep events flowing, hot-reload extensions/forwarding config ---
+# -- Idle loop: keep events flowing, hot-reload config, periodic reconciliation
 try {
     $lastReload = Get-Date
+    $lastReconcile = Get-Date
     while ($true) {
         Wait-Event -Timeout 5 | Remove-Event -ErrorAction SilentlyContinue
 
@@ -436,6 +501,15 @@ try {
                 Write-Warning "Config reload failed, keeping previous settings: $($_.Exception.Message)"
             }
             $lastReload = Get-Date
+        }
+
+        $reconcileEvery = 120
+        if ($global:FimConfig.reconciliation_scan_seconds) { $reconcileEvery = [int]$global:FimConfig.reconciliation_scan_seconds }
+
+        if (((Get-Date) - $lastReconcile).TotalSeconds -ge $reconcileEvery) {
+            try { Invoke-FimReconciliationScan }
+            catch { Write-FimDiag "ERROR in reconciliation scan: $($_.Exception.Message)" }
+            $lastReconcile = Get-Date
         }
     }
 } finally {
