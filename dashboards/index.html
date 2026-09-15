@@ -41,6 +41,24 @@
   @media(max-width:900px){ .hero-kpis { grid-template-columns:repeat(3,1fr); } }
   .portal-body { padding:var(--space-6); }
   .section-title { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin:0 0 var(--space-4); }
+  .category-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:var(--space-5); margin-bottom:var(--space-6); }
+  .category-card { position:relative; border-radius:var(--radius-md); padding:var(--space-6) var(--space-5); text-decoration:none; color:inherit; display:block; cursor:pointer; border:1px solid var(--border); transition:transform .15s,border-color .15s; overflow:hidden; }
+  .category-card:hover { transform:translateY(-3px); }
+  .category-card-icon { font-size:40px; margin-bottom:var(--space-3); }
+  .category-card-name { font-size:20px; font-weight:700; margin-bottom:6px; }
+  .category-card-desc { font-size:13px; color:var(--text-secondary); margin-bottom:var(--space-3); max-width:90%; }
+  .category-card-count { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .category-card.blue { background:linear-gradient(135deg,rgba(59,130,246,0.16) 0%,rgba(59,130,246,0.04) 100%); border-color:rgba(59,130,246,0.35); }
+  .category-card.blue:hover { border-color:#3b82f6; }
+  .category-card.blue .category-card-count { color:#3b82f6; }
+  .category-card.red { background:linear-gradient(135deg,rgba(239,68,68,0.16) 0%,rgba(239,68,68,0.04) 100%); border-color:rgba(239,68,68,0.35); }
+  .category-card.red:hover { border-color:var(--critical); }
+  .category-card.red .category-card-count { color:var(--critical); }
+  .category-card.endpoint { background:linear-gradient(135deg,rgba(34,197,94,0.16) 0%,rgba(34,197,94,0.04) 100%); border-color:rgba(34,197,94,0.35); }
+  .category-card.endpoint:hover { border-color:var(--low); }
+  .category-card.endpoint .category-card-count { color:var(--low); }
+  .back-to-categories { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary); text-decoration:none; margin-bottom:var(--space-4); cursor:pointer; background:none; border:none; padding:0; }
+  .back-to-categories:hover { color:var(--accent); }
   .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
   .dash-card { position:relative; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); text-decoration:none; color:inherit; display:block; transition:border-color .15s,transform .15s; }
   .dash-card:hover { border-color:var(--accent); transform:translateY(-2px); }
@@ -118,191 +136,211 @@
 
 <div class="portal-body">
 
-  <div class="section-title">Dashboards</div>
-  <div class="dash-grid">
+  <div id="category-select">
+    <div class="section-title">Choose a Category</div>
+    <div class="category-grid">
+      <a class="category-card blue" data-open-category="blue">
+        <div class="category-card-icon">🔵</div>
+        <div class="category-card-name">Blue Team</div>
+        <div class="category-card-desc">Defensive tooling — SIEM, network/DNS monitoring, threat intel, DFIR case management, access &amp; automation</div>
+        <div class="category-card-count" id="count-blue">— tools</div>
+      </a>
+      <a class="category-card endpoint" data-open-category="endpoint">
+        <div class="category-card-icon">🟢</div>
+        <div class="category-card-name">Endpoint Security</div>
+        <div class="category-card-desc">Real host-level monitoring — Wazuh EDR, CIS hardening, file integrity, live endpoint forensics</div>
+        <div class="category-card-count" id="count-endpoint">— tools</div>
+      </a>
+      <a href="redteam-hub.html" class="category-card red">
+        <div class="category-card-icon">🔴</div>
+        <div class="category-card-name">Red Team</div>
+        <div class="category-card-desc">Offensive/adversary-emulation toolset — Caldera, Responder, Strix AI pentest, GoPhish. Isolated lab network only.</div>
+        <div class="category-card-count">4 tools</div>
+      </a>
+    </div>
+  </div>
 
-    <a href="01_soc_overview.html" class="dash-card" data-svc="opensearch">
+  <div id="category-detail" style="display:none">
+    <button class="back-to-categories" id="back-to-categories">← Back to Categories</button>
+    <div class="section-title" id="category-detail-title">Dashboards</div>
+    <div class="dash-grid" id="category-detail-grid">
+
+    <a href="01_soc_overview.html" class="dash-card" data-svc="opensearch" data-category="blue">
       <div class="dash-card-icon">🖥️</div>
       <div class="dash-card-name">SOC Overview</div>
       <div class="dash-card-desc">Live alert feed, MITRE heatmap, sensor status, top IPs</div>
       <div class="dash-card-tags"><span class="badge badge-critical">Live</span><span class="badge badge-low">WebSocket</span></div>
     </a>
 
-    <a href="02_opensearch_siem.html" class="dash-card" data-svc="opensearch">
+    <a href="02_opensearch_siem.html" class="dash-card" data-svc="opensearch" data-category="blue">
       <div class="dash-card-icon">🔍</div>
       <div class="dash-card-name">OpenSearch SIEM</div>
       <div class="dash-card-desc">24h event timeline, severity breakdown, ElastAlert2 rules</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="03_zeek_network.html" class="dash-card" data-svc="zeek">
+    <a href="03_zeek_network.html" class="dash-card" data-svc="zeek" data-category="blue">
       <div class="dash-card-icon">🌐</div>
       <div class="dash-card-name">Zeek NSM</div>
       <div class="dash-card-desc">Live conn.log stream, protocol analysis, DNS anomaly detection</div>
       <div class="dash-card-tags"><span class="badge badge-medium">T1557.001</span></div>
     </a>
 
-    <a href="04_suricata_ids.html" class="dash-card" data-svc="suricata">
+    <a href="04_suricata_ids.html" class="dash-card" data-svc="suricata" data-category="blue">
       <div class="dash-card-icon">🛡️</div>
       <div class="dash-card-name">Suricata IDS</div>
       <div class="dash-card-desc">EVE JSON alert feed, category breakdown, top signatures</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="05_ai_agents.html" class="dash-card" data-svc="ai_agents">
+    <a href="05_ai_agents.html" class="dash-card" data-svc="ai_agents" data-category="blue">
       <div class="dash-card-icon">🤖</div>
       <div class="dash-card-name">AI Agents</div>
       <div class="dash-card-desc">CrewAI threat analyst, incident responder, threat hunter, detection engineer</div>
       <div class="dash-card-tags"><span class="badge badge-low">Ollama LLM</span></div>
     </a>
 
-    <a href="06_iris_cases.html" class="dash-card" data-svc="iris">
+    <a href="06_iris_cases.html" class="dash-card" data-svc="iris" data-category="blue">
       <div class="dash-card-icon">📋</div>
       <div class="dash-card-name">DFIR-IRIS</div>
       <div class="dash-card-desc">Case management, attack timeline, IOC tracker</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="08_misp_ti.html" class="dash-card" data-svc="misp">
+    <a href="08_misp_ti.html" class="dash-card" data-svc="misp" data-category="blue">
       <div class="dash-card-icon">🕵️</div>
       <div class="dash-card-name">MISP Threat Intel</div>
       <div class="dash-card-desc">IOC lookup, feed status, APT-29 attribution card</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="09_velociraptor.html" class="dash-card" data-svc="velociraptor">
+    <a href="09_velociraptor.html" class="dash-card" data-svc="velociraptor" data-category="endpoint">
       <div class="dash-card-icon">🦖</div>
       <div class="dash-card-name">Velociraptor DFIR</div>
       <div class="dash-card-desc">Live forensic hunts, process analysis, VQL query console</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="11_file_integrity.html" class="dash-card">
+    <a href="11_file_integrity.html" class="dash-card" data-category="endpoint">
       <div class="dash-card-icon">🗂️</div>
       <div class="dash-card-name">File Integrity</div>
       <div class="dash-card-desc">Created/modified/renamed/deleted file activity by AD user, no agent needed</div>
       <div class="dash-card-tags"><span class="badge badge-info">6 endpoints</span></div>
     </a>
 
-    <a href="12_openvas_vapt.html" class="dash-card">
+    <a href="12_openvas_vapt.html" class="dash-card" data-category="blue">
       <div class="dash-card-icon">🛡️</div>
       <div class="dash-card-name">OpenVAS VAPT</div>
       <div class="dash-card-desc">Vulnerability scanning, CVSS-scored findings, remediation priorities</div>
       <div class="dash-card-tags"><span class="badge badge-critical">3 critical</span></div>
     </a>
 
-    <a href="13_wazuh_edr.html" class="dash-card" data-svc="wazuh">
+    <a href="13_wazuh_edr.html" class="dash-card" data-svc="wazuh" data-category="endpoint">
       <div class="dash-card-icon">🐺</div>
       <div class="dash-card-name">Wazuh EDR</div>
       <div class="dash-card-desc">Host-based alerts, FIM, built-in CVE detector — swappable with OpenVAS</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="16_lynis_hardening.html" class="dash-card" data-svc="wazuh">
+    <a href="16_lynis_hardening.html" class="dash-card" data-svc="wazuh" data-category="endpoint">
       <div class="dash-card-icon">🧱</div>
       <div class="dash-card-name">OS Hardening</div>
       <div class="dash-card-desc">Wazuh SCA — CIS-benchmark hardening checks via the same single agent</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="14_honeypot.html" class="dash-card">
+    <a href="14_honeypot.html" class="dash-card" data-category="blue">
       <div class="dash-card-icon">🍯</div>
       <div class="dash-card-name">Honeypot</div>
       <div class="dash-card-desc">Cowrie/T-Pot deception — captured sessions, credentials, IOC export</div>
       <div class="dash-card-tags"><span class="badge badge-critical">217 sessions</span></div>
     </a>
 
-    <a href="15_pfsense_firewall.html" class="dash-card">
+    <a href="15_pfsense_firewall.html" class="dash-card" data-category="blue">
       <div class="dash-card-icon">🔥</div>
       <div class="dash-card-name">pfSense Firewall</div>
       <div class="dash-card-desc">Perimeter rules, GeoIP/IOC blocks, live firewall log</div>
       <div class="dash-card-tags"><span class="badge badge-critical">4,821 blocked</span></div>
     </a>
 
-    <a href="17_grafana_metrics.html" class="dash-card">
+    <a href="17_grafana_metrics.html" class="dash-card" data-category="blue">
       <div class="dash-card-icon">📈</div>
       <div class="dash-card-name">Grafana Metrics</div>
       <div class="dash-card-desc">Container CPU/memory/network health across the whole stack</div>
       <div class="dash-card-tags"><span class="badge badge-low">21/21 healthy</span></div>
     </a>
 
-    <a href="26_arkime_pcap.html" class="dash-card" data-svc="arkime">
+    <a href="26_arkime_pcap.html" class="dash-card" data-svc="arkime" data-category="blue">
       <div class="dash-card-icon">🦑</div>
       <div class="dash-card-name">Arkime PCAP</div>
       <div class="dash-card-desc">Full packet capture, indexed and searchable — complements Zeek's metadata-only conn.log</div>
       <div class="dash-card-tags"><span class="badge badge-critical">Storage-heavy</span></div>
     </a>
 
-    <a href="28_crowdsec_ips.html" class="dash-card" data-svc="crowdsec">
+    <a href="28_crowdsec_ips.html" class="dash-card" data-svc="crowdsec" data-category="blue">
       <div class="dash-card-icon">🚧</div>
       <div class="dash-card-name">CrowdSec IPS</div>
       <div class="dash-card-desc">Community-driven IP reputation blocking, complements Suricata's signatures</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="29_pihole_dns.html" class="dash-card" data-svc="pihole">
+    <a href="29_pihole_dns.html" class="dash-card" data-svc="pihole" data-category="blue">
       <div class="dash-card-icon">🕳️</div>
       <div class="dash-card-name">Pi-hole DNS</div>
       <div class="dash-card-desc">DNS-level sinkhole — blocks known-malicious domains before the request leaves the network</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="23_thehive_cortex.html" class="dash-card" data-svc="thehive">
+    <a href="23_thehive_cortex.html" class="dash-card" data-svc="thehive" data-category="blue">
       <div class="dash-card-icon">🩹</div>
       <div class="dash-card-name">TheHive + Cortex</div>
       <div class="dash-card-desc">Case mgmt + automated IOC enrichment (VirusTotal/AbuseIPDB/Shodan), complements IRIS</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="21_keycloak_sso.html" class="dash-card" style="border-color:var(--low)" data-svc="keycloak">
+    <a href="21_keycloak_sso.html" class="dash-card" style="border-color:var(--low)" data-svc="keycloak" data-category="blue">
       <div class="dash-card-icon">🔐</div>
       <div class="dash-card-name">Keycloak SSO</div>
       <div class="dash-card-desc">Central login + RBAC for every dashboard in this stack</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="22_vault_secrets.html" class="dash-card" style="border-color:var(--low)" data-svc="vault">
+    <a href="22_vault_secrets.html" class="dash-card" style="border-color:var(--low)" data-svc="vault" data-category="blue">
       <div class="dash-card-icon">🗝️</div>
       <div class="dash-card-name">Vault Secrets</div>
       <div class="dash-card-desc">Encrypted, audit-logged secrets — replaces plaintext passwords in .env</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="24_n8n_automation.html" class="dash-card" data-svc="n8n">
+    <a href="24_n8n_automation.html" class="dash-card" data-svc="n8n" data-category="blue">
       <div class="dash-card-icon">🧩</div>
       <div class="dash-card-name">n8n Automation</div>
       <div class="dash-card-desc">No-code SOAR workflows, companion to StackStorm for non-developer analysts</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="25_cyberchef.html" class="dash-card" data-svc="cyberchef">
+    <a href="25_cyberchef.html" class="dash-card" data-svc="cyberchef" data-category="blue">
       <div class="dash-card-icon">🧪</div>
       <div class="dash-card-name">CyberChef</div>
       <div class="dash-card-desc">Analyst decode/decrypt/transform toolkit — static, no backend</div>
       <div class="dash-card-tags"><span class="badge badge-info">Reference</span></div>
     </a>
 
-    <a href="27_netbox_cmdb.html" class="dash-card" data-svc="netbox">
+    <a href="27_netbox_cmdb.html" class="dash-card" data-svc="netbox" data-category="blue">
       <div class="dash-card-icon">🗄️</div>
       <div class="dash-card-name">NetBox CMDB</div>
       <div class="dash-card-desc">Asset inventory — ground truth for the AI Agents coverage-gap analysis</div>
       <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
     </a>
 
-    <a href="30_harbor_registry.html" class="dash-card">
+    <a href="30_harbor_registry.html" class="dash-card" data-category="blue">
       <div class="dash-card-icon">📦</div>
       <div class="dash-card-name">Harbor Registry</div>
       <div class="dash-card-desc">Private container registry with Trivy scanning built in — secures the image supply chain</div>
       <div class="dash-card-tags"><span class="badge badge-critical">1 critical CVE</span></div>
     </a>
 
-    <a href="redteam-hub.html" class="dash-card" style="border-color:var(--critical)" data-svc="caldera">
-      <div class="dash-card-icon">🔴</div>
-      <div class="dash-card-name">Red Team Module</div>
-      <div class="dash-card-desc">Caldera adversary emulation, Responder credential capture, Strix AI pentesting, GoPhish phishing sim — isolated offensive toolset</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">Lab only</span><span class="badge badge-medium">4 tools</span></div>
-    </a>
-
+    </div>
   </div>
 
   <div class="section-title">Direct Tool Access</div>
@@ -482,6 +520,39 @@ themeToggleBtn.addEventListener('click', () => {
 });
 
 syncThemeButton();
+
+// Category selector (Blue Team / Endpoint Security land here; Red Team is
+// a direct link out to the existing redteam-hub.html page).
+const CATEGORY_TITLES = { blue: '🔵 Blue Team Dashboards', endpoint: '🟢 Endpoint Security Dashboards' };
+
+function updateCategoryCounts() {
+  ['blue', 'endpoint'].forEach(cat => {
+    const n = document.querySelectorAll(`.dash-card[data-category="${cat}"]`).length;
+    const el = document.getElementById(`count-${cat}`);
+    if (el) el.textContent = `${n} tools`;
+  });
+}
+updateCategoryCounts();
+
+function openCategory(cat) {
+  document.getElementById('category-select').style.display = 'none';
+  document.getElementById('category-detail').style.display = 'block';
+  document.getElementById('category-detail-title').textContent = CATEGORY_TITLES[cat] || 'Dashboards';
+  document.querySelectorAll('#category-detail-grid .dash-card').forEach(card => {
+    card.style.display = card.dataset.category === cat ? 'block' : 'none';
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function backToCategories() {
+  document.getElementById('category-detail').style.display = 'none';
+  document.getElementById('category-select').style.display = 'block';
+}
+
+document.querySelectorAll('[data-open-category]').forEach(card => {
+  card.addEventListener('click', () => openCategory(card.dataset.openCategory));
+});
+document.getElementById('back-to-categories').addEventListener('click', backToCategories);
 
 // Per-card live status dots, driven by the same /api/services/status data as the topbar summary
 document.addEventListener('soc-status-update', (e) => {
