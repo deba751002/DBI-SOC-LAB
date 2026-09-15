@@ -145,27 +145,28 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">⚙️ Vulnerability Detection Engine</span></div>
+      <div class="card-header">
+        <span class="card-title">⚙️ Vulnerability Detection (Wazuh)</span>
+        <span class="badge badge-accent">LIVE</span>
+      </div>
       <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
         <p style="font-size:12px;color:var(--text-secondary)">
-          Wazuh ships its own CVE-based vulnerability detector, which overlaps with OpenVAS's scanning.
-          Running both wastes resources and can produce duplicate findings — pick one active engine below.
-          This choice is shared with the <a href="12_openvas_vapt.html" style="color:var(--accent)">OpenVAS VAPT</a> page.
+          Wazuh's own CVE-based vulnerability detector, matched against each enrolled agent's real installed
+          packages/hotfixes (via syscollector) — no separate scanner or second agent needed. OpenVAS was never
+          actually deployed in this stack, so this is the only real vulnerability engine here.
         </p>
-        <div class="engine-toggle" id="engine-toggle">
-          <button data-engine="openvas" id="btn-openvas">OpenVAS</button>
-          <button data-engine="wazuh" id="btn-wazuh">Wazuh</button>
+        <div class="grid-3">
+          <div class="kpi-card critical"><div class="kpi-label">Critical CVEs</div><div class="kpi-value" id="kpi-cve-critical">—</div></div>
+          <div class="kpi-card high"><div class="kpi-label">High CVEs</div><div class="kpi-value" id="kpi-cve-high">—</div></div>
+          <div class="kpi-card medium"><div class="kpi-label">Medium/Low CVEs</div><div class="kpi-value" id="kpi-cve-medlow">—</div></div>
         </div>
-        <div id="wazuh-vuln-banner" class="engine-banner" style="display:none">
-          <span>⚠️ Wazuh's vulnerability detector is inactive — OpenVAS is the active scanning engine.</span>
-          <button class="btn btn-primary btn-sm" onclick="setEngine('wazuh')">Use Wazuh instead</button>
-        </div>
-        <div id="wazuh-vuln-content">
-          <div class="grid-3">
-            <div class="kpi-card critical"><div class="kpi-label">Critical CVEs</div><div class="kpi-value">2</div></div>
-            <div class="kpi-card high"><div class="kpi-label">High CVEs</div><div class="kpi-value">7</div></div>
-            <div class="kpi-card medium"><div class="kpi-label">Medium/Low CVEs</div><div class="kpi-value">18</div></div>
-          </div>
+        <table class="data-table">
+          <thead><tr><th>Agent</th><th>CVE</th><th>Package</th><th>Version</th><th>Severity</th></tr></thead>
+          <tbody id="cve-body"></tbody>
+        </table>
+        <div class="wazuh-empty" id="cve-empty" style="display:none;color:var(--text-secondary);font-size:12px;text-align:center;padding:var(--space-4)">
+          No CVEs found for any enrolled agent right now — either genuinely well-patched, or the vulnerability
+          feeds haven't finished their first sync yet.
         </div>
       </div>
     </div>
@@ -211,31 +212,6 @@
 </div>
 
 <script>
-const ENGINE_KEY = 'soc_vapt_engine';
-function getEngine() { return localStorage.getItem(ENGINE_KEY) || 'openvas'; }
-function setEngine(e) { localStorage.setItem(ENGINE_KEY, e); renderEngineState(); }
-
-function renderEngineState() {
-  const engine = getEngine();
-  document.getElementById('btn-openvas').classList.toggle('active', engine === 'openvas');
-  document.getElementById('btn-wazuh').classList.toggle('active', engine === 'wazuh');
-
-  const banner = document.getElementById('wazuh-vuln-banner');
-  const content = document.getElementById('wazuh-vuln-content');
-  if (engine === 'wazuh') {
-    banner.style.display = 'none';
-    content.classList.remove('engine-disabled');
-  } else {
-    banner.style.display = 'flex';
-    content.classList.add('engine-disabled');
-  }
-}
-
-document.getElementById('btn-openvas').addEventListener('click', () => setEngine('openvas'));
-document.getElementById('btn-wazuh').addEventListener('click', () => setEngine('wazuh'));
-
-renderEngineState();
-
 // Everything below is fetched from ws-streamer's HTTP API, which proxies
 // real OpenSearch queries against soc-logs-* (log_type: wazuh). It never
 // fabricates data - empty panels mean no Wazuh alerts genuinely matched.
@@ -350,10 +326,44 @@ async function loadAgents() {
   }
 }
 
+async function loadVulnerabilities() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/vulnerabilities?limit=30`);
+    const d = await res.json();
+    document.getElementById('kpi-cve-critical').textContent = d.critical ?? 0;
+    document.getElementById('kpi-cve-high').textContent = d.high ?? 0;
+    document.getElementById('kpi-cve-medlow').textContent = (d.medium ?? 0) + (d.low ?? 0);
+
+    const tbody = document.getElementById('cve-body');
+    const empty = document.getElementById('cve-empty');
+    const findings = d.findings || [];
+    if (!findings.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = findings.map(f => `<tr style="cursor:pointer" class="${f.severity==='critical'?'row-suspicious':''}" data-id="${f.id}">
+      <td>${f.agent}</td>
+      <td class="mono">${f.cve || '—'}</td>
+      <td class="mono">${f.package || '—'}</td>
+      <td class="mono">${f.installed_version || '—'}</td>
+      <td><span class="badge badge-${(f.severity||'low')}">${(f.severity||'—').toUpperCase()}</span></td>
+    </tr>`).join('');
+    tbody.querySelectorAll('tr[data-id]').forEach(tr =>
+      tr.addEventListener('click', () => openEventModal(tr.dataset.id)));
+  } catch (e) {
+    document.getElementById('cve-body').innerHTML = '';
+    document.getElementById('cve-empty').style.display = 'block';
+    document.getElementById('cve-empty').textContent = 'Could not reach ws-streamer API.';
+  }
+}
+
 function refreshAll() {
   loadWazuhSummary();
   loadWazuhFeed();
   loadAgents();
+  loadVulnerabilities();
 }
 refreshAll();
 setInterval(refreshAll, 10000);

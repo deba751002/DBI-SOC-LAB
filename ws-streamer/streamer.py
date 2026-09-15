@@ -234,6 +234,7 @@ ZEEK_LLMNR_FILTER  = ZEEK_DNS_FILTER + [{"terms": {"id.resp_p": [5355, 137]}}]
 
 WAZUH_FILTER = [{"term": {"log_type.keyword": "wazuh"}}]
 WAZUH_FIM_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "syscheck"}}]
+WAZUH_VULN_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "vulnerability-detector"}}]
 
 
 @web.middleware
@@ -567,6 +568,47 @@ async def handle_wazuh_agents(request):
             "active": bool(is_active),
         })
     return web.json_response(out)
+
+
+async def handle_wazuh_vulnerabilities(request):
+    client = get_os_client()
+
+    def count(extra_filt):
+        return client.count(index="soc-logs-*", body={
+            "query": {"bool": {"filter": WAZUH_VULN_FILTER + extra_filt}}
+        })["count"]
+
+    by_sev = {
+        sev: count([{"term": {"severity.keyword": sev}}])
+        for sev in ("critical", "high", "medium", "low")
+    }
+
+    resp = client.search(index="soc-logs-*", body={
+        "query": {"bool": {"filter": WAZUH_VULN_FILTER}},
+        "sort": [{"rule.level": {"order": "desc"}}, {"@timestamp": {"order": "desc"}}],
+        "size": min(int(request.query.get("limit", 30)), 100),
+    })
+    findings = []
+    for h in resp["hits"]["hits"]:
+        s = h["_source"]
+        vuln = (s.get("data") or {}).get("vulnerability", {})
+        findings.append({
+            "id": h["_id"],
+            "agent": (s.get("agent") or {}).get("name", ""),
+            "cve": vuln.get("cve"),
+            "package": (vuln.get("package") or {}).get("name"),
+            "installed_version": (vuln.get("package") or {}).get("version"),
+            "severity": vuln.get("severity"),
+            "title": vuln.get("title"),
+            "published": vuln.get("published"),
+            "raw": s,
+        })
+    return web.json_response({
+        "critical": by_sev["critical"], "high": by_sev["high"],
+        "medium": by_sev["medium"], "low": by_sev["low"],
+        "total": sum(by_sev.values()),
+        "findings": findings,
+    })
 
 
 # ── AI Agents (crewai-soc) proxy - same rationale as the OpenSearch
@@ -1512,6 +1554,7 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/summary", handle_wazuh_summary)
     app.router.add_get("/api/wazuh/feed", handle_wazuh_feed)
     app.router.add_get("/api/wazuh/agents", handle_wazuh_agents)
+    app.router.add_get("/api/wazuh/vulnerabilities", handle_wazuh_vulnerabilities)
     app.router.add_get("/api/ai/health", handle_ai_health)
     app.router.add_get("/api/ai/ollama_model", handle_ai_ollama_model)
     app.router.add_get("/api/ai/jobs", handle_ai_jobs)
