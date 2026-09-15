@@ -36,6 +36,9 @@ $taskName = "SOCLab-FileIntegrityMonitor"
 if ($Uninstall) {
     Write-Host "Removing $taskName scheduled task and $InstallDir..." -ForegroundColor Yellow
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*Watch-FileIntegrity.ps1*" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Remove-Item -Recurse -Force $InstallDir -ErrorAction SilentlyContinue
     Write-Host "Done. The custom FIM watcher is no longer running on this host." -ForegroundColor Green
     exit 0
@@ -68,6 +71,15 @@ Write-Host "   Watched types: $($config.watched_extensions -join ', ')" -Foregro
 # -- Step 2: Register Scheduled Task --------------------------------------------
 Write-Host "[2/4] Registering Scheduled Task..." -ForegroundColor Yellow
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# Unregistering the task does NOT kill a process an earlier version of it
+# already spawned (e.g. one still running as SYSTEM from before this script
+# fixed that) - without this, redeploys/re-runs (including repeated
+# ManageEngine pushes) silently accumulate orphaned watcher instances, some
+# of them watching the wrong folder under the wrong account.
+Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*Watch-FileIntegrity.ps1*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$InstallDir\Watch-FileIntegrity.ps1`" -ConfigPath `"$configPath`""
