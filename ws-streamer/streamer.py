@@ -570,6 +570,66 @@ async def handle_wazuh_agents(request):
     return web.json_response(out)
 
 
+async def handle_wazuh_sca(request):
+    client = get_os_client()
+    sca_filter = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "sca"}}]
+
+    # One summary doc per agent per policy scan - take the latest per agent.
+    summaries = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": sca_filter + [{"term": {"data.sca.type.keyword": "summary"}}]}},
+        "aggs": {"by_agent": {
+            "terms": {"field": "agent.id.keyword", "size": 50},
+            "aggs": {"latest": {"top_hits": {"size": 1, "sort": [{"@timestamp": {"order": "desc"}}]}}},
+        }},
+    })
+    policies = []
+    for b in summaries["aggregations"]["by_agent"]["buckets"]:
+        s = b["latest"]["hits"]["hits"][0]["_source"]
+        sca = (s.get("data") or {}).get("sca", {})
+        policies.append({
+            "agent": (s.get("agent") or {}).get("name", ""),
+            "policy": sca.get("policy"),
+            "score": int(sca.get("score", 0)),
+            "passed": int(sca.get("passed", 0)),
+            "failed": int(sca.get("failed", 0)),
+            "invalid": int(sca.get("invalid", 0)),
+            "total_checks": int(sca.get("total_checks", 0)),
+            "scanned_at": s.get("@timestamp"),
+        })
+
+    # Most recent failed checks across all agents, deduplicated by check id
+    # (SCA re-reports every check on every scan, so keep only the latest).
+    checks = client.search(index="soc-logs-*", body={
+        "size": 200,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": sca_filter + [
+            {"term": {"data.sca.type.keyword": "check"}},
+            {"term": {"data.sca.check.result.keyword": "failed"}},
+        ]}},
+    })
+    seen = set()
+    failed = []
+    for h in checks["hits"]["hits"]:
+        s = h["_source"]
+        check = ((s.get("data") or {}).get("sca") or {}).get("check", {})
+        key = (s.get("agent", {}).get("id"), check.get("id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        failed.append({
+            "id": h["_id"],
+            "agent": (s.get("agent") or {}).get("name", ""),
+            "title": check.get("title"),
+            "cis": (check.get("compliance") or {}).get("cis"),
+            "remediation": check.get("remediation"),
+        })
+        if len(failed) >= 30:
+            break
+
+    return web.json_response({"policies": policies, "failed_checks": failed})
+
+
 async def handle_wazuh_vulnerabilities(request):
     client = get_os_client()
 
@@ -1555,6 +1615,7 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/feed", handle_wazuh_feed)
     app.router.add_get("/api/wazuh/agents", handle_wazuh_agents)
     app.router.add_get("/api/wazuh/vulnerabilities", handle_wazuh_vulnerabilities)
+    app.router.add_get("/api/wazuh/sca", handle_wazuh_sca)
     app.router.add_get("/api/ai/health", handle_ai_health)
     app.router.add_get("/api/ai/ollama_model", handle_ai_ollama_model)
     app.router.add_get("/api/ai/jobs", handle_ai_jobs)

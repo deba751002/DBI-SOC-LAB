@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lynis Hardening — DBI SOC</title>
+  <title>OS Hardening — DBI SOC</title>
   <script>
     // Applied before CSS/paint so there's no flash of the wrong theme.
     (function () {
@@ -14,6 +14,8 @@
     })();
   </script>
   <link rel="stylesheet" href="soc-theme.css">
+  <script src="status-strip.js"></script>
+  <style>.hardening-empty{color:var(--text-muted);font-size:12px;padding:var(--space-4);text-align:center}</style>
 </head>
 <body>
 <div class="layout">
@@ -48,7 +50,7 @@
       <div class="sidebar-group-label">Vulnerability & Hardening</div>
       <ul class="sidebar-nav">
         <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
-        <li class="nav-item"><a href="16_lynis_hardening.html" class="active"><span class="nav-icon">🧱</span><span>Lynis Hardening</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html" class="active"><span class="nav-icon">🧱</span><span>OS Hardening</span></a></li>
         <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
       </ul>
       <div class="sidebar-group-label">Threat Intel & Deception</div>
@@ -92,123 +94,160 @@
   </nav>
 
   <header class="topbar">
-    <div class="topbar-title"><span class="page-icon">🧱</span> Lynis — System Hardening Audit</div>
-    <span class="topbar-meta"><span class="status-dot yellow"></span> Last full audit 18h ago</span>
+    <div class="topbar-title"><span class="page-icon">🧱</span> OS Hardening — Wazuh SCA</div>
+    <span class="topbar-meta" id="topbar-meta"><span class="status-dot red" id="sca-dot"></span> <span id="sca-status-text">checking...</span></span>
     <div class="topbar-right">
+      <div id="global-status-strip"></div>
       <a href="index.html" class="btn btn-ghost btn-sm">← Portal</a>
     </div>
   </header>
 
   <main class="main-content">
 
-    <div class="grid-4 mb-4">
-      <div class="kpi-card medium">
-        <div class="kpi-label">Avg Hardening Index</div>
-        <div class="kpi-value">67<span style="font-size:16px;color:var(--text-muted)">/100</span></div>
-        <div class="kpi-sub">across 6 hosts</div>
-      </div>
-      <div class="kpi-card high">
-        <div class="kpi-label">Warnings</div>
-        <div class="kpi-value">9</div>
-        <div class="kpi-sub">needs attention</div>
-      </div>
-      <div class="kpi-card info">
-        <div class="kpi-label">Suggestions</div>
-        <div class="kpi-value">52</div>
-        <div class="kpi-sub">hardening opportunities</div>
-      </div>
-      <div class="kpi-card low">
-        <div class="kpi-label">Tests Performed</div>
-        <div class="kpi-value">238</div>
-        <div class="kpi-sub">per host, avg</div>
+    <div class="card mb-4" style="background:rgba(59,130,246,0.08);border:1px solid var(--accent)">
+      <div class="card-body" style="font-size:12px;color:var(--text-secondary)">
+        Wazuh's Security Configuration Assessment (SCA) module — CIS-benchmark-style hardening checks, run by the
+        same single agent used for everything else here (no separate Lynis install, no new agent). Lynis was
+        never actually deployed in this stack; this replaces it with a real assessment.
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">🖥️ Hardening Index by Host</span></div>
+      <div class="card-header"><span class="card-title">🖥️ Hardening Score by Agent</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Host</th><th>Index</th><th>Warnings</th><th>Suggestions</th><th>Last Run</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious">
-              <td>WIN-DC01</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:52%;background:var(--critical);border-radius:3px"></span></span>52</td>
-              <td><span class="badge badge-critical">4</span></td><td>11</td><td class="mono">18h ago</td>
-            </tr>
-            <tr>
-              <td>SRV-FILESERVER-01</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:64%;background:var(--high);border-radius:3px"></span></span>64</td>
-              <td><span class="badge badge-high">2</span></td><td>9</td><td class="mono">18h ago</td>
-            </tr>
-            <tr>
-              <td>SRV-HR-02</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:70%;background:var(--medium);border-radius:3px"></span></span>70</td>
-              <td><span class="badge badge-medium">2</span></td><td>8</td><td class="mono">18h ago</td>
-            </tr>
-            <tr>
-              <td>WKSTN-FINANCE-01</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:73%;background:var(--medium);border-radius:3px"></span></span>73</td>
-              <td><span class="badge badge-medium">1</span></td><td>8</td><td class="mono">18h ago</td>
-            </tr>
-            <tr>
-              <td>WKSTN-LEGAL-05</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:75%;background:var(--low);border-radius:3px"></span></span>75</td>
-              <td>—</td><td>7</td><td class="mono">18h ago</td>
-            </tr>
-            <tr>
-              <td>my-laptop</td>
-              <td><span class="cvss-bar" style="width:60px;height:6px;border-radius:3px;background:var(--bg-input);display:inline-block;vertical-align:middle;margin-right:6px"><span style="display:block;height:100%;width:78%;background:var(--low);border-radius:3px"></span></span>78</td>
-              <td>—</td><td>9</td><td class="mono">18h ago</td>
-            </tr>
-          </tbody>
+          <thead><tr><th>Agent</th><th>Policy</th><th>Score</th><th>Passed</th><th>Failed</th><th>Invalid</th><th>Scanned</th></tr></thead>
+          <tbody id="sca-policy-body"></tbody>
         </table>
+        <div class="hardening-empty" id="sca-policy-empty" style="display:none">No SCA scans reported yet.</div>
       </div>
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><span class="card-title">⚠️ Top Warnings</span></div>
+      <div class="card-header"><span class="card-title">⚠️ Failed Checks</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>Host</th><th>Test ID</th><th>Warning</th><th>Suggestion</th></tr></thead>
-          <tbody>
-            <tr class="row-suspicious">
-              <td>WIN-DC01</td><td class="mono">SMB-3200</td>
-              <td>SMBv1 protocol still enabled</td><td>Disable SMBv1 via Group Policy / PowerShell</td>
-            </tr>
-            <tr class="row-suspicious">
-              <td>WIN-DC01</td><td class="mono">AUTH-9328</td>
-              <td>No account lockout policy configured</td><td>Set lockout threshold to 5 attempts / 15 min</td>
-            </tr>
-            <tr>
-              <td>SRV-FILESERVER-01</td><td class="mono">FIRE-4590</td>
-              <td>Host firewall (Windows Defender Firewall) has inbound rules broader than required</td><td>Restrict inbound rules to required ports only</td>
-            </tr>
-            <tr>
-              <td>SRV-HR-02</td><td class="mono">STRG-1846</td>
-              <td>BitLocker not enabled on data volume</td><td>Enable BitLocker for at-rest encryption</td>
-            </tr>
-            <tr>
-              <td>WKSTN-FINANCE-01</td><td class="mono">PATCH-7392</td>
-              <td>3 pending security updates older than 30 days</td><td>Enforce WSUS/patch management SLA</td>
-            </tr>
-          </tbody>
+          <thead><tr><th>Agent</th><th>CIS Ref</th><th>Check</th><th>Remediation</th></tr></thead>
+          <tbody id="sca-checks-body"></tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="card mt-4">
-      <div class="card-header"><span class="card-title">🔎 Docker Bench Security</span></div>
-      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-2)">
-        <p style="font-size:12px;color:var(--text-secondary);margin:0">
-          Lynis audits the host OS above — Docker Bench Security is its Docker-specific counterpart, checking the
-          daemon/container config itself (privileged containers, exposed docker.sock, missing user namespaces).
-          One-shot script, not a running service.
-        </p>
-        <div class="job-row"><span class="status-dot yellow"></span><span style="flex:1;font-size:12px">Last run: never</span><span class="text-muted text-xs mono">./security-scan.sh --docker-bench</span></div>
+        <div class="hardening-empty" id="sca-checks-empty" style="display:none">No failed checks — or SCA hasn't scanned yet.</div>
       </div>
     </div>
 
   </main>
 </div>
+
+<!-- Event detail modal -->
+<div id="event-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-surface,#1a1f2e);border:1px solid var(--border,#333);border-radius:8px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:600;color:var(--text-primary,#eee)">Check Detail</span>
+      <button onclick="closeEventModal()" style="background:none;border:none;color:var(--text-muted,#94a3b8);font-size:20px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div id="event-modal-body" style="font-size:12px;color:var(--text-secondary,#cbd5e1);"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = `${location.protocol}//${location.hostname}:8766`;
+
+function flattenForDisplay(obj, prefix = '') {
+  const out = [];
+  for (const [k, v] of Object.entries(obj || {})) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object' && !Array.isArray(v)) out.push(...flattenForDisplay(v, key));
+    else out.push([key, Array.isArray(v) ? v.join(', ') : String(v)]);
+  }
+  return out;
+}
+
+async function openEventModal(id) {
+  const modal = document.getElementById('event-modal');
+  const body = document.getElementById('event-modal-body');
+  body.innerHTML = 'Loading…';
+  modal.style.display = 'flex';
+  try {
+    const res = await fetch(`${API_BASE}/api/event/${encodeURIComponent(id)}`);
+    if (!res.ok) { body.innerHTML = 'Not found (may have rolled out of the index).'; return; }
+    const doc = await res.json();
+    const rows = flattenForDisplay(doc).map(([k, v]) =>
+      `<tr><td style="padding:4px 10px 4px 0;color:var(--text-muted,#94a3b8);white-space:nowrap;vertical-align:top">${k}</td><td style="padding:4px 0;word-break:break-all">${v}</td></tr>`
+    ).join('');
+    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
+  } catch (e) {
+    body.innerHTML = 'Failed to load — is ws-streamer reachable?';
+  }
+}
+function closeEventModal() { document.getElementById('event-modal').style.display = 'none'; }
+document.getElementById('event-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'event-modal') closeEventModal();
+});
+
+async function refreshHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/services/status`);
+    const d = await res.json();
+    const svc = (d.services || []).find(s => s.key === 'wazuh');
+    const dot = document.getElementById('sca-dot');
+    const txt = document.getElementById('sca-status-text');
+    if (svc && svc.online) { dot.className = 'status-dot green'; txt.textContent = 'Wazuh reachable'; }
+    else { dot.className = 'status-dot red'; txt.textContent = 'Wazuh: no recent activity'; }
+  } catch (e) {}
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString(); } catch (e) { return '—'; }
+}
+
+async function refreshSca() {
+  const polBody = document.getElementById('sca-policy-body');
+  const polEmpty = document.getElementById('sca-policy-empty');
+  const checksBody = document.getElementById('sca-checks-body');
+  const checksEmpty = document.getElementById('sca-checks-empty');
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/sca`);
+    const d = await res.json();
+    const policies = d.policies || [];
+    const failed = d.failed_checks || [];
+
+    if (!policies.length) { polBody.innerHTML = ''; polEmpty.style.display = 'block'; }
+    else {
+      polEmpty.style.display = 'none';
+      polBody.innerHTML = policies.map(p => `<tr>
+        <td>${p.agent}</td>
+        <td>${p.policy || '—'}</td>
+        <td><span class="badge ${p.score>=70?'badge-low':p.score>=40?'badge-medium':'badge-critical'}">${p.score}/100</span></td>
+        <td>${p.passed}</td>
+        <td>${p.failed}</td>
+        <td>${p.invalid}</td>
+        <td class="mono">${fmtTime(p.scanned_at)}</td>
+      </tr>`).join('');
+    }
+
+    if (!failed.length) { checksBody.innerHTML = ''; checksEmpty.style.display = 'block'; }
+    else {
+      checksEmpty.style.display = 'none';
+      checksBody.innerHTML = failed.map(f => `<tr style="cursor:pointer" data-id="${f.id}">
+        <td>${f.agent}</td>
+        <td class="mono">${f.cis || '—'}</td>
+        <td>${f.title || '—'}</td>
+        <td style="max-width:400px">${f.remediation || '—'}</td>
+      </tr>`).join('');
+      checksBody.querySelectorAll('tr[data-id]').forEach(tr =>
+        tr.addEventListener('click', () => openEventModal(tr.dataset.id)));
+    }
+  } catch (e) {
+    polBody.innerHTML = ''; polEmpty.style.display = 'block'; polEmpty.textContent = 'Could not reach ws-streamer API.';
+    checksBody.innerHTML = ''; checksEmpty.style.display = 'block'; checksEmpty.textContent = 'Could not reach ws-streamer API.';
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshHealth(), refreshSca()]);
+}
+refreshAll();
+setInterval(refreshAll, 20000);
+</script>
 </body>
 </html>
