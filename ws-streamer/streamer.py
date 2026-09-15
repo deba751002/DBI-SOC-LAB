@@ -570,6 +570,28 @@ async def handle_wazuh_agents(request):
     return web.json_response(out)
 
 
+async def handle_wazuh_active_response(request):
+    client = get_os_client()
+    resp = client.search(index="soc-logs-*", body={
+        "size": min(int(request.query.get("limit", 20)), 100),
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": WAZUH_FILTER + [{"term": {"rule.groups.keyword": "active_response"}}]}},
+    })
+    out = []
+    for h in resp["hits"]["hits"]:
+        s = h["_source"]
+        data = s.get("data", {})
+        out.append({
+            "id": h["_id"],
+            "timestamp": s.get("@timestamp"),
+            "agent": (s.get("agent") or {}).get("name", ""),
+            "command": data.get("command"),
+            "program": (data.get("parameters") or {}).get("program"),
+            "description": (s.get("rule") or {}).get("description"),
+        })
+    return web.json_response({"events": out})
+
+
 async def handle_wazuh_sca(request):
     client = get_os_client()
     sca_filter = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "sca"}}]
@@ -1616,6 +1638,7 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/agents", handle_wazuh_agents)
     app.router.add_get("/api/wazuh/vulnerabilities", handle_wazuh_vulnerabilities)
     app.router.add_get("/api/wazuh/sca", handle_wazuh_sca)
+    app.router.add_get("/api/wazuh/active-response", handle_wazuh_active_response)
     app.router.add_get("/api/ai/health", handle_ai_health)
     app.router.add_get("/api/ai/ollama_model", handle_ai_ollama_model)
     app.router.add_get("/api/ai/jobs", handle_ai_jobs)

@@ -197,6 +197,29 @@
       </div>
     </div>
 
+    <!-- Active Response -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">🛡️ Active Response</span>
+        <span class="badge badge-low">ARMED</span>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:var(--space-3)">
+        <p style="font-size:12px;color:var(--text-secondary);margin:0">
+          On a genuine brute-force pattern (several failed logons in a short window, rule group
+          <span class="mono">authentication_failures</span>, level ≥ 10), the agent blocks the source IP via its
+          own Windows Firewall for 10 minutes, then auto-unblocks — a false positive can't cause a permanent lockout.
+        </p>
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Agent</th><th>Action</th><th>Description</th></tr></thead>
+          <tbody id="ar-body"></tbody>
+        </table>
+        <div class="wazuh-empty" id="ar-empty" style="display:none;color:var(--text-secondary);font-size:12px;text-align:center;padding:var(--space-4)">
+          No active-response events yet — this is expected until a real brute-force pattern (or a manual test)
+          actually triggers it.
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -359,11 +382,34 @@ async function loadVulnerabilities() {
   }
 }
 
+async function loadActiveResponse() {
+  try {
+    const res = await fetch(`${API_BASE}/api/wazuh/active-response`);
+    const d = await res.json();
+    const events = d.events || [];
+    const tbody = document.getElementById('ar-body');
+    const empty = document.getElementById('ar-empty');
+    if (!events.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = events.map(e => `<tr>
+      <td class="mono">${(e.timestamp||'').replace('T',' ').substring(0,19)}</td>
+      <td>${e.agent}</td>
+      <td><span class="badge badge-neutral">${e.command||'—'}</span></td>
+      <td>${e.description||e.program||'—'}</td>
+    </tr>`).join('');
+  } catch (e) {
+    document.getElementById('ar-body').innerHTML = '';
+    document.getElementById('ar-empty').style.display = 'block';
+    document.getElementById('ar-empty').textContent = 'Could not reach ws-streamer API.';
+  }
+}
+
 function refreshAll() {
   loadWazuhSummary();
   loadWazuhFeed();
   loadAgents();
   loadVulnerabilities();
+  loadActiveResponse();
 }
 refreshAll();
 setInterval(refreshAll, 10000);
