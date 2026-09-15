@@ -126,6 +126,20 @@ function global:Invoke-FimShadowStorePrune {
     } catch {}
 }
 
+# Diagnostic-only log, separate from fim-events.log: records that the raw
+# .NET event actually fired (BEFORE any of our own logic runs) and captures
+# any exception from inside an event action - Register-ObjectEvent action
+# scriptblocks fail silently otherwise (their errors go into a PSEventJob
+# nobody is watching), which made a real production issue undiagnosable
+# from outside the process. Never throws itself.
+function global:Write-FimDiag {
+    param([string]$Message)
+    try {
+        $diagPath = Join-Path (Split-Path $global:FimConfig.log_path) "fim-diag.log"
+        Add-Content -Path $diagPath -Value "$(Get-Date -Format o)  $Message" -ErrorAction SilentlyContinue
+    } catch {}
+}
+
 function global:Test-FimWatchedExtension {
     param([string]$Path)
     $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
@@ -348,28 +362,38 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
     $watcher.EnableRaisingEvents   = $true
 
     Register-ObjectEvent -InputObject $watcher -EventName Created -SourceIdentifier "FIM_Created_$path" -Action {
-        Send-FimEvent -Action "created" -FullPath $Event.SourceEventArgs.FullPath
+        Write-FimDiag "RAW EVENT: Created $($Event.SourceEventArgs.FullPath)"
+        try { Send-FimEvent -Action "created" -FullPath $Event.SourceEventArgs.FullPath }
+        catch { Write-FimDiag "ERROR in Created handler: $($_.Exception.Message) | $($_.ScriptStackTrace)" }
     } | Out-Null
 
     Register-ObjectEvent -InputObject $watcher -EventName Changed -SourceIdentifier "FIM_Changed_$path" -Action {
-        if ($Event.SourceEventArgs.ChangeType -eq [System.IO.WatcherChangeTypes]::Changed) {
-            Send-FimEvent -Action "modified" -FullPath $Event.SourceEventArgs.FullPath
-        }
+        Write-FimDiag "RAW EVENT: Changed $($Event.SourceEventArgs.FullPath) type=$($Event.SourceEventArgs.ChangeType)"
+        try {
+            if ($Event.SourceEventArgs.ChangeType -eq [System.IO.WatcherChangeTypes]::Changed) {
+                Send-FimEvent -Action "modified" -FullPath $Event.SourceEventArgs.FullPath
+            }
+        } catch { Write-FimDiag "ERROR in Changed handler: $($_.Exception.Message) | $($_.ScriptStackTrace)" }
     } | Out-Null
 
     Register-ObjectEvent -InputObject $watcher -EventName Deleted -SourceIdentifier "FIM_Deleted_$path" -Action {
-        Send-FimEvent -Action "deleted" -FullPath $Event.SourceEventArgs.FullPath
+        Write-FimDiag "RAW EVENT: Deleted $($Event.SourceEventArgs.FullPath)"
+        try { Send-FimEvent -Action "deleted" -FullPath $Event.SourceEventArgs.FullPath }
+        catch { Write-FimDiag "ERROR in Deleted handler: $($_.Exception.Message) | $($_.ScriptStackTrace)" }
     } | Out-Null
 
     Register-ObjectEvent -InputObject $watcher -EventName Renamed -SourceIdentifier "FIM_Renamed_$path" -Action {
-        $old = $Event.SourceEventArgs.OldFullPath
-        $new = $Event.SourceEventArgs.FullPath
-        $action = if ([System.IO.Path]::GetDirectoryName($old) -eq [System.IO.Path]::GetDirectoryName($new)) { "renamed" } else { "moved" }
-        if ($global:FimKnownFiles.ContainsKey($old)) {
-            $global:FimKnownFiles[$new] = $global:FimKnownFiles[$old]
-            $global:FimKnownFiles.Remove($old)
-        }
-        Send-FimEvent -Action $action -FullPath $new -Destination $old
+        Write-FimDiag "RAW EVENT: Renamed $($Event.SourceEventArgs.OldFullPath) -> $($Event.SourceEventArgs.FullPath)"
+        try {
+            $old = $Event.SourceEventArgs.OldFullPath
+            $new = $Event.SourceEventArgs.FullPath
+            $action = if ([System.IO.Path]::GetDirectoryName($old) -eq [System.IO.Path]::GetDirectoryName($new)) { "renamed" } else { "moved" }
+            if ($global:FimKnownFiles.ContainsKey($old)) {
+                $global:FimKnownFiles[$new] = $global:FimKnownFiles[$old]
+                $global:FimKnownFiles.Remove($old)
+            }
+            Send-FimEvent -Action $action -FullPath $new -Destination $old
+        } catch { Write-FimDiag "ERROR in Renamed handler: $($_.Exception.Message) | $($_.ScriptStackTrace)" }
     } | Out-Null
 
     # Recovers from an internal buffer overflow (see InternalBufferSize note
@@ -379,13 +403,13 @@ foreach ($rawPath in $global:FimConfig.watch_paths) {
     # itself, so this doesn't depend on closing over the loop's $path variable.
     Register-ObjectEvent -InputObject $watcher -EventName Error -SourceIdentifier "FIM_Error_$path" -Action {
         $w = $Event.Sender
-        Write-Warning "$(Get-Date -Format o)  FIM watcher error on $($w.Path) (likely internal buffer overflow) - resetting"
+        Write-FimDiag "WATCHER ERROR on $($w.Path) (likely internal buffer overflow) - resetting"
         try {
             $w.EnableRaisingEvents = $false
             Start-Sleep -Milliseconds 250
             $w.EnableRaisingEvents = $true
         } catch {
-            Write-Warning "Failed to reset watcher for $($w.Path): $($_.Exception.Message)"
+            Write-FimDiag "Failed to reset watcher for $($w.Path): $($_.Exception.Message)"
         }
     } | Out-Null
 
