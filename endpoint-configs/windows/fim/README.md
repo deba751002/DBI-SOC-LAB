@@ -87,13 +87,55 @@ top to approximate what's needed:
 
 This copies `Watch-FileIntegrity.ps1` + `fim-config.json` to
 `C:\ProgramData\SOCLab\FIM\`, registers a Scheduled Task
-(`SOCLab-FileIntegrityMonitor`) that runs at startup and logon as SYSTEM, and
-starts it immediately.
+(`SOCLab-FileIntegrityMonitor`) that runs on logon **as whichever user signs
+in** (not SYSTEM — `watch_paths` uses `%USERPROFILE%\...`, which only resolves
+to a real person's Desktop/Documents/Downloads under their own session; under
+SYSTEM it resolves to `C:\Windows\System32\config\systemprofile` and silently
+watches nothing), auto-restarts within a minute if it ever crashes, and starts
+it immediately. `Deploy-FIM.ps1` itself still needs to run elevated (it writes
+to `ProgramData` and registers the task) — only the resulting watcher process
+runs in the signed-in user's own context.
 
 To roll this out to many machines, push the `fim` folder + a GPO startup
 script (or an RMM/Intune script deployment) that runs `Deploy-FIM.ps1
 -VectorHost <your-vector-host>` — the same pattern as `install-agent.ps1` in
 the parent folder.
+
+### Deploying via ManageEngine Endpoint Central
+
+Since `Deploy-FIM.ps1` is self-contained, silent (no prompts) and idempotent
+(safe to run again — it unregisters/re-registers the task each time), it can
+be pushed as a plain **Custom Script** deployment/configuration rather than a
+packaged installer:
+
+1. In the Endpoint Central console (`https://192.168.30.6:8443` or
+   `https://secops.dbi360.com`), go to **Configurations → Custom Script** (or
+   **Software Deployment → Script Configuration**, depending on your build)
+   and add a new configuration.
+2. Upload this whole `fim` folder as the script's associated files (so
+   `Watch-FileIntegrity.ps1` and `fim-config.json` sit next to
+   `Deploy-FIM.ps1` on the endpoint at execution time — Endpoint Central
+   stages all associated files into the same working directory it runs the
+   script from).
+3. Script to execute: `Deploy-FIM.ps1 -VectorHost 192.168.30.206`. Endpoint
+   Central runs deployment scripts as SYSTEM by default — that's fine and
+   expected here: SYSTEM only needs to install the files and register the
+   Scheduled Task; the task itself is defined to run the actual watcher as
+   whichever user later logs on (`BUILTIN\Users` + `LogonType Interactive`,
+   see above), not as SYSTEM.
+4. Target it at a device group (start with just the one test laptop) and
+   deploy — Endpoint Central's own deployment status view confirms the script
+   ran and its exit code; that's install success, not proof events are
+   flowing.
+5. To actually confirm data is flowing, check the SOC dashboard's **File
+   Integrity** tab (or `curl http://<soc-server>:8766/api/fim/events`) after
+   the target user next logs on and touches a watched file — the two systems
+   (ManageEngine's own deployment status, and this lab's ws-streamer/
+   OpenSearch) are independent and both need to say yes.
+
+No new inbound port is opened on the endpoint by any of this — Endpoint
+Central pushes the script over its own existing agent channel, and the
+watcher itself only ever makes outbound connections to Vector.
 
 ## Configuring which file types are watched
 

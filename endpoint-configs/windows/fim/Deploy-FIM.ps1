@@ -71,9 +71,15 @@ Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Silent
 
 $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$InstallDir\Watch-FileIntegrity.ps1`" -ConfigPath `"$configPath`""
-$trigger1  = New-ScheduledTaskTrigger -AtStartup
-$trigger2  = New-ScheduledTaskTrigger -AtLogOn
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$trigger   = New-ScheduledTaskTrigger -AtLogOn
+# IMPORTANT: this must run as the interactively logged-on user, not SYSTEM.
+# watch_paths (fim-config.json) use %USERPROFILE%\Desktop etc - under SYSTEM
+# that expands to C:\Windows\System32\config\systemprofile, a folder nobody's
+# files are ever in, so the watcher would silently watch nothing real.
+# GroupId "BUILTIN\Users" (rather than a hardcoded -UserId) also means this
+# same task definition works for whichever user logs into a machine this was
+# pushed to via RMM (ManageEngine/GPO/Intune) - no per-device username needed.
+$principal = New-ScheduledTaskPrincipal -GroupId "BUILTIN\Users" -LogonType Interactive -RunLevel Highest
 # RestartCount/RestartInterval make this self-healing: if the watcher process
 # itself ever crashes (unhandled exception, killed, etc.) mid-session, Task
 # Scheduler restarts it within a minute - it doesn't wait for the next logon
@@ -81,7 +87,7 @@ $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccou
 $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable -ExecutionTimeLimit 0 -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
 
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($trigger1, $trigger2) `
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings -Description "SOC Lab lightweight file integrity watcher" | Out-Null
 
 # -- Step 3: Start it now -------------------------------------------------------
@@ -99,7 +105,7 @@ Write-Host " Host:        $env:COMPUTERNAME" -ForegroundColor White
 Write-Host " Vector:      ${VectorHost}:${VectorPort}" -ForegroundColor White
 Write-Host " Watched ext: $($config.watched_extensions -join ', ')" -ForegroundColor White
 Write-Host " Log file:    $($config.log_path)" -ForegroundColor White
-Write-Host " Runs:        at every startup + logon, as SYSTEM, auto-restarts within 1 min if it ever crashes" -ForegroundColor White
+Write-Host " Runs:        on logon, as the signed-in user, auto-restarts within 1 min if it ever crashes" -ForegroundColor White
 $stateOk = $task -and ($task.State -in @('Ready','Running'))
 Write-Host " Task state:  $(if ($stateOk) {'OK - ' + $task.State} else {'FAILED - ' + $task.State})" -ForegroundColor $(if ($stateOk) {'Green'} else {'Red'})
 Write-Host "==================================================================" -ForegroundColor Cyan
