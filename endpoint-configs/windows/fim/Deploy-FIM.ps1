@@ -82,7 +82,15 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Silen
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$InstallDir\Watch-FileIntegrity.ps1`" -ConfigPath `"$configPath`""
+    -Argument "-NoProfile -WindowStyle Minimized -ExecutionPolicy Bypass -File `"$InstallDir\Watch-FileIntegrity.ps1`" -ConfigPath `"$configPath`""
+# -WindowStyle Hidden was empirically found (during real endpoint testing) to
+# be unreliable for delivering FileSystemWatcher's Register-ObjectEvent
+# callbacks - the exact same script, same account, same session, only
+# differing by Hidden vs Minimized, intermittently failed to log any events
+# at all when Hidden. Minimized keeps a real (just minimized) window/message
+# context and was consistently reliable in testing. If this ever needs to be
+# fully invisible to the user, wrap it via a small VBScript/WSH launcher
+# instead of relying on -WindowStyle Hidden.
 $trigger   = New-ScheduledTaskTrigger -AtLogOn
 # IMPORTANT: this must run as the interactively logged-on user, not SYSTEM.
 # watch_paths (fim-config.json) use %USERPROFILE%\Desktop etc - under SYSTEM
