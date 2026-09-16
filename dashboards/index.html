@@ -14,68 +14,25 @@
   })();
 </script>
 <link rel="stylesheet" href="soc-theme.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="status-strip.js"></script>
 <script src="detail-modal.js"></script>
 <style>
-  body { background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary); margin:0; transition:background-color .15s ease, color .15s ease; }
   .theme-toggle {
     display:inline-flex; align-items:center; justify-content:center;
-    width:30px; height:30px; border-radius:var(--radius-sm);
+    width:28px; height:28px; border-radius:var(--radius-sm);
     background:var(--bg-input); border:1px solid var(--border);
-    color:var(--text-secondary); cursor:pointer; font-size:15px;
+    color:var(--text-secondary); cursor:pointer; font-size:14px;
     transition:border-color .15s, color .15s;
   }
   .theme-toggle:hover { border-color:var(--accent); color:var(--text-primary); }
-  .portal-header { position:sticky; top:0; z-index:100; background:var(--bg-surface-alpha); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 var(--space-6); height:var(--header-h); }
-  .portal-logo { font-size:18px; font-weight:700; color:var(--text-primary); letter-spacing:-.02em; }
-  .portal-logo span { color:var(--accent); }
-  .portal-meta { display:flex; align-items:center; gap:var(--space-4); font-size:13px; color:var(--text-muted); }
-  .portal-clock { font-family:var(--font-mono); color:var(--text-secondary); }
   .world-clocks { display:flex; align-items:center; gap:var(--space-3); font-family:var(--font-mono); }
-  .world-clock-item { display:flex; align-items:center; gap:4px; color:var(--text-secondary); }
+  .world-clock-item { display:flex; align-items:center; gap:4px; color:var(--text-secondary); font-size:11px; }
   .world-clock-item .flag { width:16px; height:12px; border-radius:2px; object-fit:cover; display:inline-block; box-shadow:0 0 0 1px rgba(255,255,255,0.08); }
-  @media(max-width:1100px){ .world-clocks { display:none; } }
-  .hero-bar { background:linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(139,92,246,0.08) 100%); border-bottom:1px solid var(--border); padding:var(--space-6) var(--space-6) var(--space-5); }
-  .hero-bar h2 { margin:0 0 6px; font-size:22px; font-weight:700; }
-  .hero-bar p  { margin:0 0 var(--space-5); color:var(--text-secondary); font-size:14px; max-width:700px; }
-  .hero-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:var(--space-3); }
-  @media(max-width:900px){ .hero-kpis { grid-template-columns:repeat(3,1fr); } }
-  .portal-body { padding:var(--space-6); }
-  .section-title { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin:0 0 var(--space-4); }
-  .category-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:var(--space-5); margin-bottom:var(--space-6); }
-  .category-card { position:relative; border-radius:var(--radius-md); padding:var(--space-6) var(--space-5); text-decoration:none; color:inherit; display:block; cursor:pointer; border:1px solid var(--border); transition:transform .15s,border-color .15s; overflow:hidden; }
-  .category-card:hover { transform:translateY(-3px); }
-  .category-card-icon { font-size:40px; margin-bottom:var(--space-3); }
-  .category-card-name { font-size:20px; font-weight:700; margin-bottom:6px; }
-  .category-card-desc { font-size:13px; color:var(--text-secondary); margin-bottom:var(--space-3); max-width:90%; }
-  .category-card-count { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-  .category-card.blue { background:linear-gradient(135deg,rgba(59,130,246,0.16) 0%,rgba(59,130,246,0.04) 100%); border-color:rgba(59,130,246,0.35); }
-  .category-card.blue:hover { border-color:#3b82f6; }
-  .category-card.blue .category-card-count { color:#3b82f6; }
-  .category-card.red { background:linear-gradient(135deg,rgba(239,68,68,0.16) 0%,rgba(239,68,68,0.04) 100%); border-color:rgba(239,68,68,0.35); }
-  .category-card.red:hover { border-color:var(--critical); }
-  .category-card.red .category-card-count { color:var(--critical); }
-  .category-card.endpoint { background:linear-gradient(135deg,rgba(34,197,94,0.16) 0%,rgba(34,197,94,0.04) 100%); border-color:rgba(34,197,94,0.35); }
-  .category-card.endpoint:hover { border-color:var(--low); }
-  .category-card.endpoint .category-card-count { color:var(--low); }
-  .back-to-categories { position:sticky; top:var(--header-h,0px); z-index:50; display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--text-secondary); text-decoration:none; cursor:pointer; background:var(--bg-surface-alpha); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 14px; margin:0 0 var(--space-4); }
-  .back-to-categories:hover { color:var(--accent); border-color:var(--accent); }
-  .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
-  .dash-card { position:relative; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4) var(--space-5); text-decoration:none; color:inherit; display:block; transition:border-color .15s,transform .15s; }
-  .dash-card:hover { border-color:var(--accent); transform:translateY(-2px); }
-  .dash-card-icon { font-size:24px; margin-bottom:var(--space-2); }
-  .dash-card-status { position:absolute; top:var(--space-4); right:var(--space-4); }
-  .dash-card-name { font-size:15px; font-weight:600; margin-bottom:4px; }
-  .dash-card-desc { font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3); }
-  .dash-card-tags { display:flex; gap:6px; flex-wrap:wrap; }
-  .tools-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:var(--space-3); margin-bottom:var(--space-6); }
-  .tool-link { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:var(--space-3) var(--space-4); text-decoration:none; color:var(--text-secondary); font-size:13px; display:flex; align-items:center; gap:8px; transition:border-color .15s,color .15s; }
-  .tool-link:hover { border-color:var(--accent); color:var(--text-primary); }
-  .tool-port { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
-  .qs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:var(--space-4); margin-bottom:var(--space-6); }
-  .qs-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--space-4); }
-  .qs-card h4 { margin:0 0 var(--space-3); font-size:13px; color:var(--text-secondary); font-weight:600; }
-  .ticker { position:fixed; bottom:0; left:0; right:0; background:var(--bg-surface-alpha); border-top:1px solid var(--border); padding:6px var(--space-4); display:flex; align-items:center; gap:var(--space-4); font-size:12px; overflow:hidden; }
+  @media(max-width:1300px){ .world-clocks { display:none; } }
+  #alert-feed .alert-item, #recent-activity-feed .alert-item { cursor:pointer; }
+  #alert-feed .alert-item:hover, #recent-activity-feed .alert-item:hover { background: rgba(59,130,246,0.06); }
+  .ticker { position:fixed; bottom:0; left:var(--sidebar-w); right:0; background:var(--bg-surface-alpha); border-top:1px solid var(--border); padding:6px var(--space-4); display:flex; align-items:center; gap:var(--space-4); font-size:12px; overflow:hidden; z-index:40; }
   .ticker-label { color:var(--accent); font-weight:700; font-family:var(--font-mono); white-space:nowrap; }
   .ticker-track { flex:1; overflow:hidden; }
   .ticker-inner { display:flex; gap:var(--space-6); animation:scroll-left 40s linear infinite; white-space:nowrap; }
@@ -83,280 +40,187 @@
   .ticker-item { color:var(--text-muted); }
   .ticker-item .t-high { color:var(--high); }
   .ticker-item .t-crit { color:var(--critical); }
-  pb { padding-bottom: 40px; display:block; }
+  .main-content { padding-bottom: 48px; }
 </style>
 </head>
 <body>
+<div class="layout">
 
-<header class="portal-header">
-  <div class="portal-logo">DBI <span>SOC</span></div>
-  <div class="portal-meta">
-    <div id="global-status-strip" data-mode="summary"></div>
-    <span class="world-clocks" id="world-clocks"></span>
-    <span class="portal-clock" id="clock">--:--:-- UTC</span>
-    <button class="theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
-  </div>
-</header>
-
-<div class="hero-bar">
-  <h2>Security Operations Command Center</h2>
-  <p>Full-stack SOC lab — SIEM, NSM, SOAR, Threat Intel, DFIR, Attack Simulation, and AI-powered analysis. 100% open-source, runs locally via Docker Compose.</p>
-  <div class="hero-kpis">
-    <div class="kpi-card critical">
-      <div class="kpi-label">Critical Alerts</div>
-      <div class="kpi-value" id="hero-critical">—</div>
-      <div class="kpi-sub">24h window</div>
-    </div>
-    <div class="kpi-card high">
-      <div class="kpi-label">High Severity</div>
-      <div class="kpi-value" id="hero-high">—</div>
-      <div class="kpi-sub">24h window</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Alerts (24h)</div>
-      <div class="kpi-value" id="hero-total">—</div>
-      <div class="kpi-sub">wazuh + suricata</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Open Cases</div>
-      <div class="kpi-value" id="hero-cases">—</div>
-      <div class="kpi-sub">IRIS tracked</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">IOCs / Events</div>
-      <div class="kpi-value" id="hero-iocs">—</div>
-      <div class="kpi-sub" id="hero-iocs-sub">MISP feeds</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Real CVEs Found</div>
-      <div class="kpi-value" id="hero-vulns">—</div>
-      <div class="kpi-sub">Wazuh vulnerability scan</div>
-    </div>
-  </div>
-</div>
-
-<div class="portal-body">
-
-  <div id="category-select">
-    <div class="section-title">Choose a Category</div>
-    <div class="category-grid">
-      <a class="category-card blue" data-open-category="blue">
-        <div class="category-card-icon">🔵</div>
-        <div class="category-card-name">Blue Team</div>
-        <div class="category-card-desc">Defensive tooling — SIEM, network/DNS monitoring, threat intel, DFIR case management, access &amp; automation</div>
-        <div class="category-card-count" id="count-blue">— tools</div>
-      </a>
-      <a class="category-card endpoint" data-open-category="endpoint">
-        <div class="category-card-icon">🟢</div>
-        <div class="category-card-name">Endpoint Security</div>
-        <div class="category-card-desc">Real host-level monitoring — Wazuh EDR, CIS hardening, file integrity, live endpoint forensics</div>
-        <div class="category-card-count" id="count-endpoint">— tools</div>
-      </a>
-      <a href="redteam-hub.html" class="category-card red">
-        <div class="category-card-icon">🔴</div>
-        <div class="category-card-name">Red Team</div>
-        <div class="category-card-desc">Offensive/adversary-emulation toolset — Caldera, Responder, Strix AI pentest, GoPhish. Isolated lab network only.</div>
-        <div class="category-card-count">4 tools</div>
-      </a>
-    </div>
-
-    <div class="card mb-4">
-      <div class="card-header">
-        <span class="card-title">🕐 Recent Activity</span>
-        <a href="01_soc_overview.html" class="btn btn-ghost btn-sm">Full SOC Overview →</a>
-      </div>
-      <div id="recent-activity-feed" class="alert-feed">
-        <p style="font-size:12px;color:var(--text-muted);padding:var(--space-4)">Loading…</p>
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" class="brand-icon" style="text-decoration:none;font-size:15px;">🛡️</a>
+      <div class="brand-text">
+        <span class="brand-title">DBI SOC</span>
+        <span class="brand-sub">COMMAND CENTER</span>
       </div>
     </div>
-  </div>
-
-  <div id="category-detail" style="display:none">
-    <button class="back-to-categories" id="back-to-categories">← Back to Categories</button>
-    <div class="section-title" id="category-detail-title">Dashboards</div>
-    <div class="dash-grid" id="category-detail-grid">
-
-    <a href="01_soc_overview.html" class="dash-card" data-svc="opensearch" data-category="blue">
-      <div class="dash-card-icon">🖥️</div>
-      <div class="dash-card-name">SOC Overview</div>
-      <div class="dash-card-desc">Live alert feed, MITRE heatmap, sensor status, top IPs</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">Live</span><span class="badge badge-low">WebSocket</span></div>
-    </a>
-
-    <a href="02_opensearch_siem.html" class="dash-card" data-svc="opensearch" data-category="blue">
-      <div class="dash-card-icon">🔍</div>
-      <div class="dash-card-name">OpenSearch SIEM</div>
-      <div class="dash-card-desc">24h event timeline, severity breakdown, ElastAlert2 rules</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="03_zeek_network.html" class="dash-card" data-svc="zeek" data-category="blue">
-      <div class="dash-card-icon">🌐</div>
-      <div class="dash-card-name">Zeek NSM</div>
-      <div class="dash-card-desc">Live conn.log stream, protocol analysis, DNS anomaly detection</div>
-      <div class="dash-card-tags"><span class="badge badge-medium">T1557.001</span></div>
-    </a>
-
-    <a href="04_suricata_ids.html" class="dash-card" data-svc="suricata" data-category="blue">
-      <div class="dash-card-icon">🛡️</div>
-      <div class="dash-card-name">Suricata IDS</div>
-      <div class="dash-card-desc">EVE JSON alert feed, category breakdown, top signatures</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="05_ai_agents.html" class="dash-card" data-svc="ai_agents" data-category="blue">
-      <div class="dash-card-icon">🤖</div>
-      <div class="dash-card-name">AI Agents</div>
-      <div class="dash-card-desc">CrewAI threat analyst, incident responder, threat hunter, detection engineer</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Ollama LLM</span></div>
-    </a>
-
-    <a href="06_iris_cases.html" class="dash-card" data-svc="iris" data-category="blue">
-      <div class="dash-card-icon">📋</div>
-      <div class="dash-card-name">DFIR-IRIS</div>
-      <div class="dash-card-desc">Case management, attack timeline, IOC tracker</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="08_misp_ti.html" class="dash-card" data-svc="misp" data-category="blue">
-      <div class="dash-card-icon">🕵️</div>
-      <div class="dash-card-name">MISP Threat Intel</div>
-      <div class="dash-card-desc">IOC lookup, feed status, APT-29 attribution card</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="09_velociraptor.html" class="dash-card" data-svc="velociraptor" data-category="endpoint">
-      <div class="dash-card-icon">🦖</div>
-      <div class="dash-card-name">Velociraptor DFIR</div>
-      <div class="dash-card-desc">Live forensic hunts, process analysis, VQL query console</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="11_file_integrity.html" class="dash-card" data-category="endpoint">
-      <div class="dash-card-icon">🗂️</div>
-      <div class="dash-card-name">File Integrity</div>
-      <div class="dash-card-desc">Create/modify/copy/move/delete tracking by AD user, with content preview and delete recovery — single watcher, no new ports</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="12_openvas_vapt.html" class="dash-card" data-category="blue">
-      <div class="dash-card-icon">🛡️</div>
-      <div class="dash-card-name">OpenVAS VAPT</div>
-      <div class="dash-card-desc">Vulnerability scanning, CVSS-scored findings, remediation priorities</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">3 critical</span></div>
-    </a>
-
-    <a href="13_wazuh_edr.html" class="dash-card" data-svc="wazuh" data-category="endpoint">
-      <div class="dash-card-icon">🐺</div>
-      <div class="dash-card-name">Wazuh EDR</div>
-      <div class="dash-card-desc">Host-based alerts, FIM, built-in CVE detector — swappable with OpenVAS</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="16_lynis_hardening.html" class="dash-card" data-svc="wazuh" data-category="endpoint">
-      <div class="dash-card-icon">🧱</div>
-      <div class="dash-card-name">OS Hardening</div>
-      <div class="dash-card-desc">Wazuh SCA — CIS-benchmark hardening checks via the same single agent</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="14_honeypot.html" class="dash-card" data-category="blue">
-      <div class="dash-card-icon">🍯</div>
-      <div class="dash-card-name">Honeypot</div>
-      <div class="dash-card-desc">Cowrie/T-Pot deception — captured sessions, credentials, IOC export</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">217 sessions</span></div>
-    </a>
-
-    <a href="15_pfsense_firewall.html" class="dash-card" data-category="blue">
-      <div class="dash-card-icon">🔥</div>
-      <div class="dash-card-name">pfSense Firewall</div>
-      <div class="dash-card-desc">Perimeter rules, GeoIP/IOC blocks, live firewall log</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">4,821 blocked</span></div>
-    </a>
-
-    <a href="17_grafana_metrics.html" class="dash-card" data-category="blue">
-      <div class="dash-card-icon">📈</div>
-      <div class="dash-card-name">Grafana Metrics</div>
-      <div class="dash-card-desc">Container CPU/memory/network health across the whole stack</div>
-      <div class="dash-card-tags"><span class="badge badge-low">21/21 healthy</span></div>
-    </a>
-
-    <a href="26_arkime_pcap.html" class="dash-card" data-svc="arkime" data-category="blue">
-      <div class="dash-card-icon">🦑</div>
-      <div class="dash-card-name">Arkime PCAP</div>
-      <div class="dash-card-desc">Full packet capture, indexed and searchable — complements Zeek's metadata-only conn.log</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">Storage-heavy</span></div>
-    </a>
-
-    <a href="28_crowdsec_ips.html" class="dash-card" data-svc="crowdsec" data-category="blue">
-      <div class="dash-card-icon">🚧</div>
-      <div class="dash-card-name">CrowdSec IPS</div>
-      <div class="dash-card-desc">Community-driven IP reputation blocking, complements Suricata's signatures</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="29_pihole_dns.html" class="dash-card" data-svc="pihole" data-category="blue">
-      <div class="dash-card-icon">🕳️</div>
-      <div class="dash-card-name">Pi-hole DNS</div>
-      <div class="dash-card-desc">DNS-level sinkhole — blocks known-malicious domains before the request leaves the network</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="23_thehive_cortex.html" class="dash-card" data-svc="thehive" data-category="blue">
-      <div class="dash-card-icon">🩹</div>
-      <div class="dash-card-name">TheHive + Cortex</div>
-      <div class="dash-card-desc">Case mgmt + automated IOC enrichment (VirusTotal/AbuseIPDB/Shodan), complements IRIS</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="21_keycloak_sso.html" class="dash-card" style="border-color:var(--low)" data-svc="keycloak" data-category="blue">
-      <div class="dash-card-icon">🔐</div>
-      <div class="dash-card-name">Keycloak SSO</div>
-      <div class="dash-card-desc">Central login + RBAC for every dashboard in this stack</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="22_vault_secrets.html" class="dash-card" style="border-color:var(--low)" data-svc="vault" data-category="blue">
-      <div class="dash-card-icon">🗝️</div>
-      <div class="dash-card-name">Vault Secrets</div>
-      <div class="dash-card-desc">Encrypted, audit-logged secrets — replaces plaintext passwords in .env</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="24_n8n_automation.html" class="dash-card" data-svc="n8n" data-category="blue">
-      <div class="dash-card-icon">🧩</div>
-      <div class="dash-card-name">n8n Automation</div>
-      <div class="dash-card-desc">No-code SOAR workflows, companion to StackStorm for non-developer analysts</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="25_cyberchef.html" class="dash-card" data-svc="cyberchef" data-category="blue">
-      <div class="dash-card-icon">🧪</div>
-      <div class="dash-card-name">CyberChef</div>
-      <div class="dash-card-desc">Analyst decode/decrypt/transform toolkit — static, no backend</div>
-      <div class="dash-card-tags"><span class="badge badge-info">Reference</span></div>
-    </a>
-
-    <a href="27_netbox_cmdb.html" class="dash-card" data-svc="netbox" data-category="blue">
-      <div class="dash-card-icon">🗄️</div>
-      <div class="dash-card-name">NetBox CMDB</div>
-      <div class="dash-card-desc">Asset inventory — ground truth for the AI Agents coverage-gap analysis</div>
-      <div class="dash-card-tags"><span class="badge badge-low">Live</span></div>
-    </a>
-
-    <a href="30_harbor_registry.html" class="dash-card" data-category="blue">
-      <div class="dash-card-icon">📦</div>
-      <div class="dash-card-name">Harbor Registry</div>
-      <div class="dash-card-desc">Private container registry with Trivy scanning built in — secures the image supply chain</div>
-      <div class="dash-card-tags"><span class="badge badge-critical">1 critical CVE</span></div>
-    </a>
-
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboards</div>
+      <div class="sidebar-group-label">Command & Analytics</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="01_soc_overview.html"><span class="nav-icon">📊</span><span>SOC Overview</span></a></li>
+        <li class="nav-item"><a href="05_ai_agents.html"><span class="nav-icon">🤖</span><span>AI Agents</span></a></li>
+        <li class="nav-item"><a href="02_opensearch_siem.html"><span class="nav-icon">🔍</span><span>OpenSearch SIEM</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Network Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="15_pfsense_firewall.html"><span class="nav-icon">🔥</span><span>pfSense Firewall</span></a></li>
+        <li class="nav-item"><a href="04_suricata_ids.html"><span class="nav-icon">🚨</span><span>Suricata IDS</span></a></li>
+        <li class="nav-item"><a href="03_zeek_network.html"><span class="nav-icon">🌐</span><span>Zeek Network</span></a></li>
+        <li class="nav-item"><a href="26_arkime_pcap.html"><span class="nav-icon">🦑</span><span>Arkime PCAP</span></a></li>
+        <li class="nav-item"><a href="28_crowdsec_ips.html"><span class="nav-icon">🚧</span><span>CrowdSec IPS</span></a></li>
+        <li class="nav-item"><a href="29_pihole_dns.html"><span class="nav-icon">🕳️</span><span>Pi-hole DNS</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Endpoint Security</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="13_wazuh_edr.html"><span class="nav-icon">🐺</span><span>Wazuh EDR</span></a></li>
+        <li class="nav-item"><a href="11_file_integrity.html"><span class="nav-icon">🗂️</span><span>File Integrity</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Vulnerability & Hardening</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="12_openvas_vapt.html"><span class="nav-icon">🛡️</span><span>OpenVAS VAPT</span></a></li>
+        <li class="nav-item"><a href="16_lynis_hardening.html"><span class="nav-icon">🧱</span><span>OS Hardening</span></a></li>
+        <li class="nav-item"><a href="30_harbor_registry.html"><span class="nav-icon">📦</span><span>Harbor Registry</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Threat Intel & Deception</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="08_misp_ti.html"><span class="nav-icon">🌍</span><span>MISP Intel</span></a></li>
+        <li class="nav-item"><a href="14_honeypot.html"><span class="nav-icon">🍯</span><span>Honeypot</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">DFIR & Case Management</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="06_iris_cases.html"><span class="nav-icon">📋</span><span>DFIR-IRIS</span></a></li>
+        <li class="nav-item"><a href="09_velociraptor.html"><span class="nav-icon">🦖</span><span>Velociraptor</span></a></li>
+        <li class="nav-item"><a href="23_thehive_cortex.html"><span class="nav-icon">🩹</span><span>TheHive + Cortex</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Access & Secrets</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="21_keycloak_sso.html"><span class="nav-icon">🔐</span><span>Keycloak SSO</span></a></li>
+        <li class="nav-item"><a href="22_vault_secrets.html"><span class="nav-icon">🗝️</span><span>Vault Secrets</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Automation</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="24_n8n_automation.html"><span class="nav-icon">🧩</span><span>n8n Automation</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Analyst Tools</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="25_cyberchef.html"><span class="nav-icon">🧪</span><span>CyberChef</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Asset & Ops</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="27_netbox_cmdb.html"><span class="nav-icon">🗄️</span><span>NetBox CMDB</span></a></li>
+      </ul>
+      <div class="sidebar-group-label">Observability</div>
+      <ul class="sidebar-nav">
+        <li class="nav-item"><a href="17_grafana_metrics.html"><span class="nav-icon">📈</span><span>Grafana Metrics</span></a></li>
+      </ul>
+      <div class="sidebar-divider"></div>
+      <ul class="sidebar-nav">
+        <li class="nav-item danger"><a href="redteam-hub.html"><span class="nav-icon">🔴</span><span>Red Team Module</span></a></li>
+      </ul>
     </div>
-  </div>
+    <div class="sidebar-footer">DBI SOC · OSS</div>
+  </nav>
 
+  <header class="topbar">
+    <div class="topbar-title"><span class="page-icon">🛡️</span> Command Center</div>
+    <span class="topbar-meta" id="last-update">—</span>
+    <div class="topbar-right">
+      <div id="global-status-strip" data-mode="summary"></div>
+      <span class="world-clocks" id="world-clocks"></span>
+      <span class="topbar-meta" id="clock">--:--:-- UTC</span>
+      <button class="theme-toggle" id="theme-toggle" type="button" title="Switch theme" aria-label="Switch between dark and light theme">🌙</button>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <div class="grid-4 mb-4" style="grid-template-columns:repeat(6,1fr)">
+      <div class="kpi-card critical">
+        <div class="kpi-label">Critical Alerts</div>
+        <div class="kpi-value" id="hero-critical">—</div>
+        <div class="kpi-sub">24h window</div>
+      </div>
+      <div class="kpi-card high">
+        <div class="kpi-label">High Severity</div>
+        <div class="kpi-value" id="hero-high">—</div>
+        <div class="kpi-sub">24h window</div>
+      </div>
+      <div class="kpi-card medium">
+        <div class="kpi-label">Alerts (24h)</div>
+        <div class="kpi-value" id="hero-total">—</div>
+        <div class="kpi-sub">wazuh + suricata</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Open Cases</div>
+        <div class="kpi-value" id="hero-cases">—</div>
+        <div class="kpi-sub">IRIS tracked</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">IOCs / Events</div>
+        <div class="kpi-value" id="hero-iocs">—</div>
+        <div class="kpi-sub" id="hero-iocs-sub">MISP feeds</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Real CVEs Found</div>
+        <div class="kpi-value" id="hero-vulns">—</div>
+        <div class="kpi-sub">Wazuh vulnerability scan</div>
+      </div>
+    </div>
+
+    <div class="grid-2-1 mb-4">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔴 Live Alert Feed</span>
+          <span class="badge badge-critical">Live</span>
+        </div>
+        <div id="alert-feed" class="alert-feed" style="max-height:420px;overflow-y:auto;">
+          <p style="font-size:12px;color:var(--text-muted);padding:var(--space-4)">Loading…</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ MITRE Techniques</span>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap" style="height:360px">
+            <canvas id="mitreChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-header"><span class="card-title">📡 Sensor Status</span></div>
+        <div class="card-body-sm" id="sensor-status">
+          <p style="font-size:12px;color:var(--text-muted)">Loading…</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">🎯 Top Source IPs</span></div>
+        <div class="card-body" style="padding-top:var(--space-3)">
+          <table class="data-table">
+            <thead><tr><th>IP Address</th><th>Events (24h)</th></tr></thead>
+            <tbody id="top-ips-body"><tr><td colspan="2" class="text-muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">📦 Event Sources</span></div>
+        <div class="card-body">
+          <div class="chart-wrap" style="height:210px">
+            <canvas id="sourceChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
 </div>
-
-<pb></pb>
 
 <!-- Ticker -->
 <div class="ticker">
@@ -431,99 +295,73 @@ themeToggleBtn.addEventListener('click', () => {
 
 syncThemeButton();
 
-// Category selector (Blue Team / Endpoint Security land here; Red Team is
-// a direct link out to the existing redteam-hub.html page).
-const CATEGORY_TITLES = { blue: '🔵 Blue Team Dashboards', endpoint: '🟢 Endpoint Security Dashboards' };
+// ── Real-time SOC console data — every widget below is wired to
+// ws-streamer, no hardcoded/sample values.
+const API_BASE = 'http://192.168.30.206:8766';
 
-function updateCategoryCounts() {
-  ['blue', 'endpoint'].forEach(cat => {
-    const n = document.querySelectorAll(`.dash-card[data-category="${cat}"]`).length;
-    const el = document.getElementById(`count-${cat}`);
-    if (el) el.textContent = `${n} tools`;
-  });
-}
-updateCategoryCounts();
+Chart.defaults.color = '#8898aa';
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
 
-function openCategory(cat) {
-  document.getElementById('category-select').style.display = 'none';
-  document.getElementById('category-detail').style.display = 'block';
-  document.getElementById('category-detail-title').textContent = CATEGORY_TITLES[cat] || 'Dashboards';
-  document.querySelectorAll('#category-detail-grid .dash-card').forEach(card => {
-    card.style.display = card.dataset.category === cat ? 'block' : 'none';
-  });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function backToCategories() {
-  document.getElementById('category-detail').style.display = 'none';
-  document.getElementById('category-select').style.display = 'block';
-}
-
-document.querySelectorAll('[data-open-category]').forEach(card => {
-  card.addEventListener('click', () => openCategory(card.dataset.openCategory));
-});
-document.getElementById('back-to-categories').addEventListener('click', backToCategories);
-
-// Per-card live status dots, driven by the same /api/services/status data as the topbar summary
-document.addEventListener('soc-status-update', (e) => {
-  const services = e.detail.services || [];
-  const byKey = Object.fromEntries(services.map(s => [s.key, s.online]));
-  document.querySelectorAll('.dash-card').forEach(card => {
-    let dot = card.querySelector('.dash-card-status');
-    if (!dot) {
-      dot = document.createElement('span');
-      dot.className = 'dash-card-status status-dot';
-      card.appendChild(dot);
+const mitreChart = new Chart(document.getElementById('mitreChart').getContext('2d'), {
+  type: 'bar',
+  data: { labels: [], datasets: [{ label: 'Detections', data: [], backgroundColor: 'rgba(239,68,68,.65)', borderRadius: 4, borderSkipped: false }] },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(31,45,74,.8)' }, ticks: { precision: 0 } },
+      y: { grid: { display: false }, ticks: { font: { family: "'JetBrains Mono',monospace", size: 10 } } }
     }
-    const svc = card.dataset.svc;
-    const online = svc ? !!byKey[svc] : false;
-    dot.classList.toggle('green', online);
-    dot.classList.toggle('red', !online);
-    dot.title = svc ? (online ? 'Live' : 'Offline') : 'Status not monitored';
-  });
-});
-
-// ── Real hero KPIs + live ticker — every number here used to be hardcoded
-// sample data (9 critical alerts, 127 high severity, a fictional APT-29
-// "detection rate", WKSTN-FINANCE-01 ticker items that don't exist anywhere
-// in this lab). Wired to the same ws-streamer this portal already talks to
-// for per-card status dots.
-const HERO_API_BASE = 'http://192.168.30.206:8766';
-
-async function loadHeroKpis() {
-  try {
-    const [overview, iris, misp, mispFeeds, vulns] = await Promise.all([
-      fetch(`${HERO_API_BASE}/api/overview/summary`).then(r => r.json()).catch(() => null),
-      fetch(`${HERO_API_BASE}/api/iris/cases`).then(r => r.json()).catch(() => null),
-      fetch(`${HERO_API_BASE}/api/misp/events`).then(r => r.json()).catch(() => null),
-      fetch(`${HERO_API_BASE}/api/misp/feeds`).then(r => r.json()).catch(() => null),
-      fetch(`${HERO_API_BASE}/api/wazuh/vulnerabilities`).then(r => r.json()).catch(() => null),
-    ]);
-
-    if (overview) {
-      document.getElementById('hero-critical').textContent = overview.critical_24h ?? '—';
-      document.getElementById('hero-high').textContent = overview.high_24h ?? '—';
-      document.getElementById('hero-total').textContent = (overview.total_24h ?? 0).toLocaleString();
-    }
-    if (iris && !iris.error) {
-      document.getElementById('hero-cases').textContent = iris.cases?.length ?? '—';
-    }
-    if (misp && !misp.error) {
-      document.getElementById('hero-iocs').textContent = misp.events?.length ?? '—';
-      const feedCount = (mispFeeds && !mispFeeds.error) ? (mispFeeds.feeds?.length ?? 0) : 0;
-      document.getElementById('hero-iocs-sub').textContent = `${feedCount} MISP feed(s)`;
-    }
-    if (vulns && !vulns.error) {
-      document.getElementById('hero-vulns').textContent = vulns.total ?? '—';
-    }
-
-    if (overview?.recent_alerts?.length) {
-      renderTicker(overview.recent_alerts);
-      renderRecentActivity(overview.recent_alerts);
-    }
-  } catch (e) {
-    // Leave "—" placeholders rather than fabricate anything.
   }
+});
+
+const sourceChart = new Chart(document.getElementById('sourceChart').getContext('2d'), {
+  type: 'doughnut',
+  data: { labels: [], datasets: [{ data: [], backgroundColor: ['#3b82f6','#06b6d4','#f97316','#22c55e','#8b5cf6','#eab308','#ef4444','#14b8a6','#a855f7','#84cc16'], borderColor: '#141b2d', borderWidth: 2, hoverOffset: 6 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '65%',
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8 } } }
+  }
+});
+
+const EVENT_LIST = []; // {id, timestamp, severity, title, meta, raw}
+
+function tsNow() {
+  const n = new Date();
+  return [n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+}
+
+function fmtTime(iso) {
+  if (!iso) return tsNow();
+  try { const d = new Date(iso); return [d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':'); }
+  catch (e) { return tsNow(); }
+}
+
+function renderFeed() {
+  const feed = document.getElementById('alert-feed');
+  feed.innerHTML = EVENT_LIST.map((a, i) => `
+    <div class="alert-item" data-idx="${i}">
+      <div class="alert-dot ${a.severity}"></div>
+      <div class="alert-content">
+        <div class="alert-title">${a.title}</div>
+        <div class="alert-meta"><span>${a.meta || ''}</span></div>
+      </div>
+      <div class="alert-time">${fmtTime(a.timestamp)}</div>
+    </div>`).join('');
+  feed.querySelectorAll('.alert-item[data-idx]').forEach(el => {
+    el.addEventListener('click', () => {
+      const a = EVENT_LIST[+el.dataset.idx];
+      openDetailModal(a.raw || a, `Alert — ${a.title}`);
+    });
+  });
+}
+
+function prependAlert(a) {
+  EVENT_LIST.unshift(a);
+  if (EVENT_LIST.length > 25) EVENT_LIST.length = 25;
+  renderFeed();
+  document.getElementById('last-update').textContent = 'Updated ' + tsNow();
 }
 
 function renderTicker(alerts) {
@@ -533,40 +371,101 @@ function renderTicker(alerts) {
     const tag = cls ? `<span class="${cls}">[${a.severity.toUpperCase()}]</span> ` : '';
     return `<span class="ticker-item">${tag}${a.title}${a.meta ? ' — ' + a.meta : ''}</span>`;
   });
-  // Duplicated once so the CSS scroll animation (which translates by -50%) loops seamlessly.
   document.getElementById('ticker-inner').innerHTML = items.concat(items).join('');
 }
 
-function fmtAlertTime(iso) {
-  if (!iso) return '';
+async function loadOverview() {
   try {
-    const d = new Date(iso);
-    return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
-  } catch (e) { return ''; }
+    const [overview, iris, misp, mispFeeds, vulns] = await Promise.all([
+      fetch(`${API_BASE}/api/overview/summary`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/iris/cases`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/misp/events`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/misp/feeds`).then(r => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/wazuh/vulnerabilities`).then(r => r.json()).catch(() => null),
+    ]);
+
+    if (overview) {
+      document.getElementById('hero-critical').textContent = overview.critical_24h ?? 0;
+      document.getElementById('hero-high').textContent = overview.high_24h ?? 0;
+      document.getElementById('hero-total').textContent = (overview.total_24h ?? 0).toLocaleString();
+
+      mitreChart.data.labels = (overview.mitre || []).map(m => m.technique);
+      mitreChart.data.datasets[0].data = (overview.mitre || []).map(m => m.count);
+      mitreChart.update();
+
+      sourceChart.data.labels = (overview.event_sources || []).map(s => s.label);
+      sourceChart.data.datasets[0].data = (overview.event_sources || []).map(s => s.count);
+      sourceChart.update();
+
+      const ipsBody = document.getElementById('top-ips-body');
+      const ips = overview.top_ips || [];
+      ipsBody.innerHTML = ips.length
+        ? ips.map(ip => `<tr><td class="mono">${ip.ip}</td><td class="mono">${ip.count}</td></tr>`).join('')
+        : '<tr><td colspan="2" class="text-muted">No Suricata source-IP activity in the last 24h</td></tr>';
+
+      if (EVENT_LIST.length === 0 && overview.recent_alerts?.length) {
+        overview.recent_alerts.forEach(a => EVENT_LIST.push(a));
+        renderFeed();
+      }
+      if (overview.recent_alerts?.length) renderTicker(overview.recent_alerts);
+    }
+    if (iris && !iris.error) document.getElementById('hero-cases').textContent = iris.cases?.length ?? 0;
+    if (misp && !misp.error) {
+      document.getElementById('hero-iocs').textContent = misp.events?.length ?? 0;
+      const feedCount = (mispFeeds && !mispFeeds.error) ? (mispFeeds.feeds?.length ?? 0) : 0;
+      document.getElementById('hero-iocs-sub').textContent = `${feedCount} MISP feed(s)`;
+    }
+    if (vulns && !vulns.error) document.getElementById('hero-vulns').textContent = vulns.total ?? 0;
+  } catch (err) {
+    document.getElementById('last-update').textContent = 'ws-streamer unreachable';
+  }
 }
 
-function renderRecentActivity(alerts) {
-  const box = document.getElementById('recent-activity-feed');
-  const top = alerts.slice(0, 6);
-  box.innerHTML = top.map((a, i) => `
-    <div class="alert-item" data-idx="${i}" style="cursor:pointer">
-      <div class="alert-dot ${a.severity}"></div>
-      <div class="alert-content">
-        <div class="alert-title">${a.title}</div>
-        <div class="alert-meta"><span>${a.meta || ''}</span></div>
-      </div>
-      <div class="alert-time">${fmtAlertTime(a.timestamp)}</div>
-    </div>`).join('');
-  box.querySelectorAll('.alert-item[data-idx]').forEach(el => {
-    el.addEventListener('click', () => {
-      const a = top[+el.dataset.idx];
-      openDetailModal(a.raw || a, `Alert — ${a.title}`);
-    });
-  });
+async function loadSensorStatus() {
+  const box = document.getElementById('sensor-status');
+  try {
+    const resp = await fetch(`${API_BASE}/api/services/status`);
+    const d = await resp.json();
+    const relevant = ['opensearch', 'suricata', 'zeek', 'wazuh', 'stackstorm', 'misp'];
+    const rows = (d.services || []).filter(s => relevant.includes(s.key));
+    box.innerHTML = rows.map(s => `
+      <div class="status-row">
+        <span class="status-label">${s.name}</span>
+        <span class="status-value"><span class="status-dot ${s.online ? 'up' : 'down'}"></span>${s.online ? 'Reporting' : 'No data'}</span>
+      </div>`).join('');
+  } catch (err) {
+    box.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">ws-streamer unreachable</p>';
+  }
 }
 
-loadHeroKpis();
-setInterval(loadHeroKpis, 30000);
+loadOverview();
+loadSensorStatus();
+setInterval(loadOverview, 30000);
+setInterval(loadSensorStatus, 30000);
+
+// Real-time push via ws-streamer's own WebSocket
+(function connectWS() {
+  try {
+    const ws = new WebSocket('ws://192.168.30.206:8765');
+    ws.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.type === 'alerts' && Array.isArray(d.alerts)) {
+          d.alerts.forEach(h => prependAlert({
+            id: h.id,
+            timestamp: h.timestamp,
+            severity: (h.severity || 'medium').toLowerCase(),
+            title: h.message || h.mitre_technique || 'Alert',
+            meta: `${h.src_ip || h.hostname || ''} · ${h.mitre_technique || ''}`.replace(/^ · | · $/, ''),
+            raw: h,
+          }));
+        }
+      } catch (_) {}
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => setTimeout(connectWS, 5000);
+  } catch (_) {}
+})();
 </script>
 </body>
 </html>
