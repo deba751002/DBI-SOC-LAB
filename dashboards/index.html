@@ -103,33 +103,33 @@
   <div class="hero-kpis">
     <div class="kpi-card critical">
       <div class="kpi-label">Critical Alerts</div>
-      <div class="kpi-value">9</div>
-      <div class="kpi-sub">↑ 3 new</div>
+      <div class="kpi-value" id="hero-critical">—</div>
+      <div class="kpi-sub">24h window</div>
     </div>
     <div class="kpi-card high">
       <div class="kpi-label">High Severity</div>
-      <div class="kpi-value">127</div>
-      <div class="kpi-sub">14 unreviewed</div>
+      <div class="kpi-value" id="hero-high">—</div>
+      <div class="kpi-sub">24h window</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Events (24h)</div>
-      <div class="kpi-value">48K</div>
-      <div class="kpi-sub">↑ 12%</div>
+      <div class="kpi-label">Alerts (24h)</div>
+      <div class="kpi-value" id="hero-total">—</div>
+      <div class="kpi-sub">wazuh + suricata</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Open Cases</div>
-      <div class="kpi-value">2</div>
+      <div class="kpi-value" id="hero-cases">—</div>
       <div class="kpi-sub">IRIS tracked</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">IOCs Active</div>
-      <div class="kpi-value">12,847</div>
-      <div class="kpi-sub">4 feeds</div>
+      <div class="kpi-label">IOCs / Events</div>
+      <div class="kpi-value" id="hero-iocs">—</div>
+      <div class="kpi-sub" id="hero-iocs-sub">MISP feeds</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Detection Rate</div>
-      <div class="kpi-value">85%</div>
-      <div class="kpi-sub">APT-29 sim</div>
+      <div class="kpi-label">Real CVEs Found</div>
+      <div class="kpi-value" id="hero-vulns">—</div>
+      <div class="kpi-sub">Wazuh vulnerability scan</div>
     </div>
   </div>
 </div>
@@ -433,27 +433,7 @@ ansible-playbook -i inventory.local.ini \
   <span class="ticker-label">LIVE</span>
   <div class="ticker-track">
     <div class="ticker-inner" id="ticker-inner">
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1003.001 LSASS dump — WKSTN-FINANCE-01 · 185.220.101.45</span>
-      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1110.001 Password spray — 247 failures in 60s against DC-CORP-01</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1041 Exfil 4.2 GB to Tor exit node — port 443</span>
-      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1557.001 LLMNR poisoning — CORP\jsmith hash captured</span>
-      <span class="ticker-item">[MISP] New IOC matched: 185.220.101.45 — APT-29 Cozy Bear confirmed</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> Suricata SID 2030358 — Cobalt Strike Beacon blocked</span>
-      <span class="ticker-item">[IRIS] Case INC-2026-001 updated — lateral movement to DC-CORP-01 confirmed</span>
-      <span class="ticker-item">[AI] Threat Analyst agent: 85% confidence APT-29 attribution · 13 TTPs matched</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1562.001 Defender disabled — detection gap identified</span>
-      <span class="ticker-item">[CALDERA] APT-29 operation complete — 11/13 techniques detected (85%)</span>
-      <!-- duplicate for seamless loop -->
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1003.001 LSASS dump — WKSTN-FINANCE-01 · 185.220.101.45</span>
-      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1110.001 Password spray — 247 failures in 60s against DC-CORP-01</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1041 Exfil 4.2 GB to Tor exit node — port 443</span>
-      <span class="ticker-item"><span class="t-high">[HIGH]</span> T1557.001 LLMNR poisoning — CORP\jsmith hash captured</span>
-      <span class="ticker-item">[MISP] New IOC matched: 185.220.101.45 — APT-29 Cozy Bear confirmed</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> Suricata SID 2030358 — Cobalt Strike Beacon blocked</span>
-      <span class="ticker-item">[IRIS] Case INC-2026-001 updated — lateral movement to DC-CORP-01 confirmed</span>
-      <span class="ticker-item">[AI] Threat Analyst agent: 85% confidence APT-29 attribution · 13 TTPs matched</span>
-      <span class="ticker-item"><span class="t-crit">[CRITICAL]</span> T1562.001 Defender disabled — detection gap identified</span>
-      <span class="ticker-item">[CALDERA] APT-29 operation complete — 11/13 techniques detected (85%)</span>
+      <span class="ticker-item">Loading live alerts…</span>
     </div>
   </div>
 </div>
@@ -572,6 +552,62 @@ document.addEventListener('soc-status-update', (e) => {
     dot.title = svc ? (online ? 'Live' : 'Offline') : 'Status not monitored';
   });
 });
+
+// ── Real hero KPIs + live ticker — every number here used to be hardcoded
+// sample data (9 critical alerts, 127 high severity, a fictional APT-29
+// "detection rate", WKSTN-FINANCE-01 ticker items that don't exist anywhere
+// in this lab). Wired to the same ws-streamer this portal already talks to
+// for per-card status dots.
+const HERO_API_BASE = 'http://192.168.30.206:8766';
+
+async function loadHeroKpis() {
+  try {
+    const [overview, iris, misp, mispFeeds, vulns] = await Promise.all([
+      fetch(`${HERO_API_BASE}/api/overview/summary`).then(r => r.json()).catch(() => null),
+      fetch(`${HERO_API_BASE}/api/iris/cases`).then(r => r.json()).catch(() => null),
+      fetch(`${HERO_API_BASE}/api/misp/events`).then(r => r.json()).catch(() => null),
+      fetch(`${HERO_API_BASE}/api/misp/feeds`).then(r => r.json()).catch(() => null),
+      fetch(`${HERO_API_BASE}/api/wazuh/vulnerabilities`).then(r => r.json()).catch(() => null),
+    ]);
+
+    if (overview) {
+      document.getElementById('hero-critical').textContent = overview.critical_24h ?? '—';
+      document.getElementById('hero-high').textContent = overview.high_24h ?? '—';
+      document.getElementById('hero-total').textContent = (overview.total_24h ?? 0).toLocaleString();
+    }
+    if (iris && !iris.error) {
+      document.getElementById('hero-cases').textContent = iris.cases?.length ?? '—';
+    }
+    if (misp && !misp.error) {
+      document.getElementById('hero-iocs').textContent = misp.events?.length ?? '—';
+      const feedCount = (mispFeeds && !mispFeeds.error) ? (mispFeeds.feeds?.length ?? 0) : 0;
+      document.getElementById('hero-iocs-sub').textContent = `${feedCount} MISP feed(s)`;
+    }
+    if (vulns && !vulns.error) {
+      document.getElementById('hero-vulns').textContent = vulns.total ?? '—';
+    }
+
+    if (overview?.recent_alerts?.length) {
+      renderTicker(overview.recent_alerts);
+    }
+  } catch (e) {
+    // Leave "—" placeholders rather than fabricate anything.
+  }
+}
+
+function renderTicker(alerts) {
+  const sevClass = { critical: 't-crit', high: 't-high' };
+  const items = alerts.map(a => {
+    const cls = sevClass[a.severity];
+    const tag = cls ? `<span class="${cls}">[${a.severity.toUpperCase()}]</span> ` : '';
+    return `<span class="ticker-item">${tag}${a.title}${a.meta ? ' — ' + a.meta : ''}</span>`;
+  });
+  // Duplicated once so the CSS scroll animation (which translates by -50%) loops seamlessly.
+  document.getElementById('ticker-inner').innerHTML = items.concat(items).join('');
+}
+
+loadHeroKpis();
+setInterval(loadHeroKpis, 30000);
 </script>
 </body>
 </html>
