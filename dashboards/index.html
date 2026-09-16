@@ -41,6 +41,40 @@
   .ticker-item .t-high { color:var(--high); }
   .ticker-item .t-crit { color:var(--critical); }
   .main-content { padding-bottom: 48px; }
+
+  /* ── Live ops-center polish ─────────────────────────────────────── */
+  .layout::before {
+    content:''; position:fixed; top:0; left:var(--sidebar-w); right:0; height:2px; z-index:60;
+    background:linear-gradient(90deg, var(--critical), var(--high), var(--accent), var(--low));
+    opacity:.7;
+  }
+  @keyframes live-pulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(239,68,68,.5); } 50% { opacity:.55; box-shadow:0 0 0 5px rgba(239,68,68,0); } }
+  .badge-critical { animation: live-pulse 1.8s ease-in-out infinite; }
+  .ticker-label::before {
+    content:''; display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--critical); margin-right:6px; animation: live-pulse 1.8s ease-in-out infinite;
+  }
+  .ws-dot.connected { animation: live-pulse 1.8s ease-in-out infinite; }
+
+  .kpi-value { font-size:30px; letter-spacing:-.01em; font-variant-numeric: tabular-nums; }
+  .kpi-label { letter-spacing:.06em; }
+  .kpi-card { transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .kpi-card:hover { box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  .kpi-card.critical:hover { border-color:var(--critical); }
+  .kpi-card.high:hover { border-color:var(--high); }
+
+  .trend-up { color:var(--critical); }
+  .trend-down { color:var(--low); }
+  .trend-flat { color:var(--text-muted); }
+
+  #alert-feed .alert-item, #recent-activity-feed .alert-item {
+    border-left:3px solid transparent; transition: background .15s, border-color .15s;
+  }
+  #alert-feed .alert-item:has(.alert-dot.critical), #recent-activity-feed .alert-item:has(.alert-dot.critical) { border-left-color:var(--critical); }
+  #alert-feed .alert-item:has(.alert-dot.high), #recent-activity-feed .alert-item:has(.alert-dot.high) { border-left-color:var(--high); }
+
+  .card-title { letter-spacing:.02em; }
+  .topbar-title .page-icon { filter: drop-shadow(0 0 6px rgba(59,130,246,.5)); }
 </style>
 </head>
 <body>
@@ -149,7 +183,7 @@
       <div class="kpi-card medium">
         <div class="kpi-label">Alerts (24h)</div>
         <div class="kpi-value" id="hero-total">—</div>
-        <div class="kpi-sub">wazuh + suricata</div>
+        <div class="kpi-sub" id="hero-total-trend">wazuh + suricata</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Open Cases</div>
@@ -374,6 +408,8 @@ function renderTicker(alerts) {
   document.getElementById('ticker-inner').innerHTML = items.concat(items).join('');
 }
 
+let lastTotal24h = null;
+
 async function loadOverview() {
   try {
     const [overview, iris, misp, mispFeeds, vulns] = await Promise.all([
@@ -388,6 +424,14 @@ async function loadOverview() {
       document.getElementById('hero-critical').textContent = overview.critical_24h ?? 0;
       document.getElementById('hero-high').textContent = overview.high_24h ?? 0;
       document.getElementById('hero-total').textContent = (overview.total_24h ?? 0).toLocaleString();
+      const trendEl = document.getElementById('hero-total-trend');
+      if (lastTotal24h !== null && overview.total_24h !== undefined) {
+        const delta = overview.total_24h - lastTotal24h;
+        if (delta > 0) trendEl.innerHTML = `<span class="trend-up">↑ +${delta.toLocaleString()}</span> since last poll`;
+        else if (delta < 0) trendEl.innerHTML = `<span class="trend-down">↓ ${delta.toLocaleString()}</span> since last poll`;
+        else trendEl.innerHTML = `<span class="trend-flat">— no change</span> since last poll`;
+      }
+      lastTotal24h = overview.total_24h ?? lastTotal24h;
 
       mitreChart.data.labels = (overview.mitre || []).map(m => m.technique);
       mitreChart.data.datasets[0].data = (overview.mitre || []).map(m => m.count);
