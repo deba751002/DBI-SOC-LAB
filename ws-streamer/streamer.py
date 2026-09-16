@@ -577,6 +577,90 @@ async def handle_wazuh_agents(request):
     return web.json_response(out)
 
 
+EVENT_SOURCE_LABELS = {
+    "wazuh": "Wazuh (local)", "wazuh-remote": "Wazuh", "suricata": "Suricata",
+    "zeek": "Zeek", "sysmon": "Sysmon", "auditd": "Linux Auditd",
+    "osquery": "osquery", "file_integrity": "File Integrity", "cloud": "Cloud",
+}
+
+
+async def handle_overview_summary(request):
+    """Real, aggregate data for the SOC Overview landing page - KPIs, MITRE
+    technique breakdown, event-source mix, top source IPs, and a seed batch
+    of recent alerts (the live feed then continues via the /ws websocket).
+    Replaces what used to be entirely hardcoded sample data on that page."""
+    client = get_os_client()
+    day = {"range": {"@timestamp": {"gte": "now-24h"}}}
+    alerting_types = {"terms": {"log_type.keyword": ["wazuh", "wazuh-remote", "suricata"]}}
+
+    def count(filt):
+        return client.count(index="soc-logs-*", body={"query": {"bool": {"filter": filt}}})["count"]
+
+    # Wazuh/wazuh-remote use a normalized severity string; Suricata only ever
+    # carries its own raw numeric severity (1=highest) via rule.severity
+    # (set in parse_suricata) - summed together per bucket rather than forced
+    # into one shared field neither source actually has.
+    critical_24h = (
+        count([WAZUH_FILTER[0], day, {"term": {"severity.keyword": "critical"}}])
+        + count(SURICATA_FILTER + [day, {"term": {"rule.severity": 1}}])
+    )
+    high_24h = (
+        count([WAZUH_FILTER[0], day, {"term": {"severity.keyword": "high"}}])
+        + count(SURICATA_FILTER + [day, {"term": {"rule.severity": 2}}])
+    )
+    total_24h = count([alerting_types, day])
+
+    sensors_resp = client.search(index="soc-logs-*", body={
+        "size": 0, "query": {"bool": {"filter": [day]}},
+        "aggs": {"sources": {"cardinality": {"field": "log_type.keyword"}}},
+    })
+    active_sensors = sensors_resp["aggregations"]["sources"]["value"]
+
+    mitre_resp = client.search(index="soc-logs-*", body={
+        "size": 0,
+        "query": {"bool": {"filter": [alerting_types, day], "must_not": [{"term": {"mitre.technique.keyword": "N/A"}}]}},
+        "aggs": {"techniques": {"terms": {"field": "mitre.technique.keyword", "size": 8}}},
+    })
+    mitre = [{"technique": b["key"], "count": b["doc_count"]} for b in mitre_resp["aggregations"]["techniques"]["buckets"]]
+
+    sources_resp = client.search(index="soc-logs-*", body={
+        "size": 0, "query": {"bool": {"filter": [day]}},
+        "aggs": {"types": {"terms": {"field": "log_type.keyword", "size": 10}}},
+    })
+    event_sources = [
+        {"log_type": b["key"], "label": EVENT_SOURCE_LABELS.get(b["key"], b["key"]), "count": b["doc_count"]}
+        for b in sources_resp["aggregations"]["types"]["buckets"]
+    ]
+
+    ips_resp = client.search(index="soc-logs-*", body={
+        "size": 0, "query": {"bool": {"filter": SURICATA_FILTER + [day]}},
+        "aggs": {"ips": {"terms": {"field": "src_ip.keyword", "size": 5}}},
+    })
+    top_ips = [{"ip": b["key"], "count": b["doc_count"]} for b in ips_resp["aggregations"]["ips"]["buckets"]]
+
+    recent_resp = client.search(index="soc-logs-*", body={
+        "size": 12, "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": [alerting_types]}},
+    })
+    recent_alerts = []
+    for h in recent_resp["hits"]["hits"]:
+        s = h["_source"]
+        recent_alerts.append({
+            "id": h["_id"],
+            "timestamp": s.get("@timestamp"),
+            "severity": (s.get("severity") or "medium").lower(),
+            "title": (s.get("rule") or {}).get("description") or s.get("rule_name") or (s.get("alert") or {}).get("signature") or "Alert",
+            "meta": f"{s.get('src_ip') or (s.get('agent') or {}).get('ip') or ''} · {(s.get('mitre') or {}).get('technique', '')}".strip(" ·"),
+            "raw": s,
+        })
+
+    return web.json_response({
+        "critical_24h": critical_24h, "high_24h": high_24h, "total_24h": total_24h,
+        "active_sensors": active_sensors, "mitre": mitre, "event_sources": event_sources,
+        "top_ips": top_ips, "recent_alerts": recent_alerts,
+    })
+
+
 async def handle_wazuh_active_response(request):
     client = get_os_client()
     resp = client.search(index="soc-logs-*", body={
@@ -1668,7 +1752,7 @@ async def handle_services_status(request):
         {"key": "opensearch", "name": "OpenSearch", "online": os_ok},
         {"key": "suricata", "name": "Suricata", "online": "suricata" in recent_types},
         {"key": "zeek", "name": "Zeek", "online": "zeek" in recent_types},
-        {"key": "wazuh", "name": "Wazuh", "online": "wazuh" in recent_types},
+        {"key": "wazuh", "name": "Wazuh", "online": "wazuh" in recent_types or "wazuh-remote" in recent_types},
         {"key": "misp", "name": "MISP", "online": misp_ok},
         {"key": "iris", "name": "DFIR-IRIS", "online": iris_ok},
         {"key": "ai_agents", "name": "AI Agents", "online": ai_ok},
@@ -1720,6 +1804,7 @@ async def start_http_app():
     app.router.add_get("/api/wazuh/vulnerabilities", handle_wazuh_vulnerabilities)
     app.router.add_get("/api/wazuh/sca", handle_wazuh_sca)
     app.router.add_get("/api/wazuh/active-response", handle_wazuh_active_response)
+    app.router.add_get("/api/overview/summary", handle_overview_summary)
     app.router.add_get("/api/fim/events", handle_fim_events)
     app.router.add_get("/api/fim/restore/{id}", handle_fim_restore)
     app.router.add_get("/api/ai/health", handle_ai_health)
