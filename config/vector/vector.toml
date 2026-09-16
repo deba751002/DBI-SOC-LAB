@@ -180,7 +180,14 @@ data_dir = "/var/lib/vector"
       lvl = to_int(.rule.level) ?? 0
       if lvl >= 12 { "critical" } else if lvl >= 9 { "high" } else if lvl >= 6 { "medium" } else { "low" }
     } else { "low" }
-    .host.name       = .agent.name
+    # NOT .host.name = ... - "host" gets indexed as a plain string by other
+    # sources sharing this same daily index, and whichever document arrives
+    # first each day wins that field's type; a later document trying to set
+    # it as a nested object then gets the whole bulk-index request rejected
+    # ("Can't get text on a START_OBJECT") - same class of bug as the "id"
+    # collision above. ws-streamer only ever reads agent.name for Wazuh data
+    # anyway, so this flat field is just for the live-feed hostname display.
+    .hostname        = .agent.name
     .rule_name       = .rule.description
     .mitre.technique = if exists(.rule.mitre.id) {
       join(.rule.mitre.id, ", ") ?? "N/A"
@@ -204,7 +211,8 @@ data_dir = "/var/lib/vector"
       lvl = to_int(.rule.level) ?? 0
       if lvl >= 12 { "critical" } else if lvl >= 9 { "high" } else if lvl >= 6 { "medium" } else { "low" }
     } else { "low" }
-    .host.name       = .agent.name
+    # NOT .host.name = ... - see the same-named comment in parse_wazuh above.
+    .hostname        = .agent.name
     .rule_name       = .rule.description
     .mitre.technique = if exists(.rule.mitre.id) {
       join(.rule.mitre.id, ", ") ?? "N/A"
