@@ -413,42 +413,22 @@ being inline), so leaving IPS mode off is always safe.
 
 ---
 
-## Wazuh EDR — Two Ways to Connect It, and the Firewall Impact of Each
+## Wazuh EDR — Connected to the Org's Real Wazuh (siem.dbi360.com)
 
-Both are **opt-in** — by default, no Wazuh service runs at all.
-
-### (a) Standalone — run a local Wazuh manager in this lab
-
-```bash
-docker compose --profile standalone-wazuh up -d
-```
-
-The `wazuh-manager` service (port 1514 for agent data, 1515 for enrollment, 55000 for the API)
-receives data from a lightweight Windows/Linux agent — see `endpoint-configs/windows/wazuh/`.
-
-**Firewall impact on endpoints: none.** The agent is push-only — it connects *out* to the manager
-on 1514/1515, the same way a browser connects out to a website. It does not open or listen on any
-new inbound port on the endpoint. Only the manager (inside the lab's own Docker network) has an
-inbound-reachable port, and that's only reachable from the lab network, not the internet.
-
-**Why there's no wazuh-indexer or wazuh-dashboard service:** both are just Wazuh's own fork of
-OpenSearch/OpenSearch-Dashboards, and would collide with the OpenSearch + Dashboards this lab
-already runs on the same ports (9200/5601). Instead, the manager's local `alerts.json` log is tailed
-directly by Vector and indexed into the same `soc-logs-*` index as every other source — filter on
-`log_type: wazuh` in OpenSearch Dashboards.
-
-### (b) External / Remote — you already have Wazuh hosted elsewhere (e.g. AWS EC2)
+This is no longer a lab-only exercise — Wazuh is the org's real, production EC2-hosted
+deployment. The local `standalone-wazuh` manager this lab used to run was fully retired
+(2026-09-16) once that real deployment came online; there is no local Wazuh service anymore.
 
 ```bash
 # .env
-WAZUH_INDEXER_URL=https://your-wazuh-host.example.com:9200
-WAZUH_INDEXER_USER=admin
-WAZUH_INDEXER_PASSWORD=your-indexer-password
+WAZUH_INDEXER_URL=https://<indexer-host-or-private-ip>:9200
+WAZUH_INDEXER_USER=<indexer username>
+WAZUH_INDEXER_PASSWORD=<indexer password>
 
 docker compose --profile remote-wazuh up -d --build
 ```
 
-`wazuh-remote-connector/poller.py` polls your remote Wazuh **indexer's** `_search` API every 30s
+`wazuh-remote-connector/poller.py` polls the remote Wazuh **indexer's** `_search` API every 30s
 (`WAZUH_POLL_INTERVAL_SECS`) for new documents in `wazuh-alerts-*`, and forwards each one into this
 lab's Vector, which indexes it into `soc-logs-*` (filter `log_type: wazuh-remote`).
 
@@ -482,14 +462,27 @@ just to see its existing alerts here.
 Management → Index Patterns, or Discover) before relying on it — override via `WAZUH_ALERT_INDEX` /
 edit `WAZUH_TIMESTAMP_FIELD` in `wazuh-remote-connector/poller.py` if they differ.
 
-### Why Wazuh's built-in FIM (syscheck) is disabled either way
+**If the indexer is reachable on 443/9200 per the security group but every connection attempt still
+"Connection refused" (not "timed out")** — that was actually a security-group false negative, not a
+real fix: the indexer had genuinely become reachable at the network layer, but OpenSearch itself was
+still only bound to `127.0.0.1` (`network.host` in `opensearch.yml`), so nothing outside the host
+could ever complete a connection to it regardless of firewall rules. Fixed on the indexer host with:
+```bash
+sudo sed -i 's/network.host: "127.0.0.1"/network.host: ["127.0.0.1", "<its own private IP>"]/' /etc/wazuh-indexer/opensearch.yml
+sudo systemctl restart wazuh-indexer
+```
+(keep `127.0.0.1` in the list too — the Wazuh Dashboard on that same host talks to the indexer over
+localhost, and removing it broke dashboard login entirely until re-added.)
 
-This lab's own File Integrity Monitoring watcher (`endpoint-configs/windows/fim/`) already covers
-that ground with AD-user attribution, rename/move/copy tracking, and per-user ZIP restore — features
-syscheck doesn't have. Running both would just duplicate alerts for the same file events. For the
-standalone profile, the manager pushes `config/wazuh/shared-agent.conf` to every enrolled agent
-automatically (Wazuh's shared-configuration mechanism) — no per-agent editing needed. See that file's
-comments if you'd rather use Wazuh's FIM instead.
+### Wazuh's built-in FIM (syscheck) runs independently of this lab's own FIM tool
+
+This lab's own File Integrity Monitoring watcher (`endpoint-configs/windows/fim/`) covers ground
+syscheck doesn't — AD-user attribution, rename/move/copy correlation, content preview, and per-user
+ZIP restore. Since Wazuh is now a real, externally-managed deployment, this lab doesn't control its
+shared agent configuration the way it could with the old local manager — syscheck runs on whatever
+that manager's own policy dictates, independently of (and potentially overlapping with) this lab's
+FIM tool. That overlap is accepted, not actively suppressed, for the same reason: this project no
+longer owns that manager's config.
 
 ---
 

@@ -1,9 +1,13 @@
 # Wazuh Agent — Endpoint Deployment
 
 Host-based EDR: log collection, active response, and its own CVE vulnerability
-detector. This lab's own File Integrity Monitoring watcher is used instead of
-Wazuh's built-in FIM (syscheck) — see `endpoint-configs/windows/fim/` — so
-there's no duplicate file-change alerting between the two.
+detector. This project's Wazuh is now the org's real, externally-managed
+deployment (`siem.dbi360.com`) — not a local manager this repo controls — so
+this section no longer manages the manager's shared agent config (including
+whether syscheck, Wazuh's own FIM, is enabled). This lab's own File Integrity
+Monitoring watcher (`endpoint-configs/windows/fim/`) still runs independently
+and may overlap with syscheck's alerts; that overlap is accepted rather than
+suppressed, since the manager's config isn't ours to edit anymore.
 
 ## Firewall / port impact — read this first
 
@@ -23,20 +27,22 @@ touch those ports and doesn't need them — it only needs *outbound* 1514/1515
 allowed, which is normally already permitted since most firewalls restrict
 inbound traffic by default, not outbound.
 
-The only place a port gets opened for *inbound* access is on the **manager**
-side (in the lab's Docker network) — see `docker-compose.yml`'s
-`wazuh-manager` service, and that's only reachable from the lab's own
-network, not the internet.
+The manager itself lives outside this repo entirely now (an EC2-hosted,
+org-managed Wazuh) — its own security group controls who can reach it, not
+anything in this `docker-compose.yml`.
 
 ## Deploy
 
 ```powershell
 # Run as Administrator on the target Windows machine
-.\Deploy-WazuhAgent.ps1 -ManagerHost 192.168.10.30
+.\Deploy-WazuhAgent.ps1 -ManagerHost <manager private IP, e.g. 10.2.131.158>
 ```
 
 This downloads the official Wazuh agent MSI, installs it silently, enrolls it
-with the manager, and starts the `WazuhSvc` service.
+with the manager, and starts the `WazuhSvc` service. Use the manager's actual
+reachable address (typically its private IP over the org's VPN) — the public
+hostname (e.g. `siem.dbi360.com`) usually only routes to the web dashboard
+(443) through a load balancer that doesn't forward 1514/1515 at all.
 
 ## Uninstall
 
@@ -44,25 +50,10 @@ with the manager, and starts the `WazuhSvc` service.
 .\Deploy-WazuhAgent.ps1 -Uninstall
 ```
 
-## Why syscheck (Wazuh's FIM) is disabled
-
-`config/wazuh/shared-agent.conf` is mounted into the manager at
-`/var/ossec/etc/shared/default/agent.conf` — Wazuh's standard mechanism for
-pushing configuration to every agent in the "default" group automatically,
-with no per-agent editing needed. It disables `<syscheck>` because this lab's
-own FIM watcher already covers that ground with richer features (AD-user
-attribution, rename/move/copy before-and-after paths, per-user ZIP restore)
-that Wazuh's syscheck doesn't provide out of the box.
-
-To use Wazuh's FIM instead: edit `config/wazuh/shared-agent.conf` to
-`<disabled>no</disabled>`, restart `wazuh-manager`, and stop the custom
-watcher on each endpoint with `Deploy-FIM.ps1 -Uninstall`.
-
 ## Where the data goes
 
-The manager writes every alert locally to `/var/ossec/logs/alerts/alerts.json`
-(no wazuh-indexer or wazuh-dashboard is deployed — this lab already runs
-OpenSearch + Dashboards on the same ports those would use, 9200/5601, so
-running both would be redundant). Vector tails that file directly and indexes
-it into the same `soc-logs-*` index as everything else — query it with
-`log_type: wazuh`.
+This project no longer reads the manager's local `alerts.json` file directly
+(that only worked for the retired local manager). Alerts now reach this
+lab's `soc-logs-*` OpenSearch index via `wazuh-remote-connector/poller.py`,
+which polls the manager's own indexer — see the "Wazuh EDR" section in the
+top-level `README.md`. Query with `log_type: wazuh-remote`.

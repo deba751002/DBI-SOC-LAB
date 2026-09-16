@@ -62,11 +62,6 @@ data_dir = "/var/lib/vector"
   mode    = "udp"
   address = "0.0.0.0:514"
 
-[sources.wazuh_alerts]
-  type    = "file"
-  include = ["/wazuh-alerts/alerts.json"]
-  read_from = "end"
-
 # Fed by wazuh-remote-connector/poller.py, which pulls alerts from an
 # externally-hosted Wazuh (e.g. AWS EC2) indexer and pushes them here.
 [sources.wazuh_remote]
@@ -161,11 +156,16 @@ data_dir = "/var/lib/vector"
     }
   '''
 
-[transforms.parse_wazuh]
+# The org's real Wazuh (siem.dbi360.com, an AWS EC2 deployment) is the only
+# Wazuh source now - the local standalone-wazuh manager this lab used to run
+# was retired once that came online (2026-09-16). This transform handles
+# alerts pulled from it by wazuh-remote-connector/poller.py. The http_server
+# source (wazuh_remote) with decoding.codec = "json" already parses the
+# body - fields are at the root, not wrapped in .message.
+[transforms.parse_wazuh_remote]
   type   = "remap"
-  inputs = ["wazuh_alerts"]
+  inputs = ["wazuh_remote"]
   source = '''
-    . = parse_json!(.message)
     # Zeek's dotted field names (id.orig_h, id.orig_p, ...) make OpenSearch's
     # dynamic mapping treat "id" as an object - Wazuh's own top-level "id"
     # (its alert ID, a plain string) then collides with that mapping and
@@ -174,7 +174,7 @@ data_dir = "/var/lib/vector"
     # found a concrete value"). Rename it out of the way.
     .wazuh_alert_id = del(.id)
     .log_source  = "endpoint"
-    .log_type    = "wazuh"
+    .log_type    = "wazuh-remote"
     .@timestamp  = now()
     .severity    = if exists(.rule.level) {
       lvl = to_int(.rule.level) ?? 0
@@ -187,31 +187,6 @@ data_dir = "/var/lib/vector"
     # ("Can't get text on a START_OBJECT") - same class of bug as the "id"
     # collision above. ws-streamer only ever reads agent.name for Wazuh data
     # anyway, so this flat field is just for the live-feed hostname display.
-    .hostname        = .agent.name
-    .rule_name       = .rule.description
-    .mitre.technique = if exists(.rule.mitre.id) {
-      join(.rule.mitre.id, ", ") ?? "N/A"
-    } else { "N/A" }
-  '''
-
-# Same alert shape as parse_wazuh above, but the http_server source with
-# decoding.codec = "json" already parses the body — fields are at the root,
-# not wrapped in .message.
-[transforms.parse_wazuh_remote]
-  type   = "remap"
-  inputs = ["wazuh_remote"]
-  source = '''
-    # Same "id" vs. Zeek's id.orig_h/id.orig_p mapping collision as
-    # parse_wazuh above - rename it out of the way.
-    .wazuh_alert_id = del(.id)
-    .log_source  = "endpoint"
-    .log_type    = "wazuh-remote"
-    .@timestamp  = now()
-    .severity    = if exists(.rule.level) {
-      lvl = to_int(.rule.level) ?? 0
-      if lvl >= 12 { "critical" } else if lvl >= 9 { "high" } else if lvl >= 6 { "medium" } else { "low" }
-    } else { "low" }
-    # NOT .host.name = ... - see the same-named comment in parse_wazuh above.
     .hostname        = .agent.name
     .rule_name       = .rule.description
     .mitre.technique = if exists(.rule.mitre.id) {
@@ -256,7 +231,7 @@ data_dir = "/var/lib/vector"
 
 [transforms.merge_all]
   type   = "remap"
-  inputs = ["parse_windows","parse_linux","parse_zeek","parse_suricata","parse_fim","parse_wazuh","parse_wazuh_remote","parse_osquery","parse_cloud","beats_input","syslog_udp"]
+  inputs = ["parse_windows","parse_linux","parse_zeek","parse_suricata","parse_fim","parse_wazuh_remote","parse_osquery","parse_cloud","beats_input","syslog_udp"]
   source = '''
     .pipeline.ingested_at = now()
     .pipeline.name        = "soc-lab-v2"

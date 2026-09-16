@@ -12,10 +12,10 @@ across two pipelines.
 (TCP :6000) with its own MITRE-technique mapping in `transforms.parse_windows`
 (EventID 1/3/7/8/10/11/13/22 -> ATT&CK techniques) — this was scaffolded before
 anything on the endpoint side actually fed it. Routing Sysmon through the
-Wazuh agent instead would create the exact duplicate-alerting problem this
-lab's own `config/wazuh/shared-agent.conf` already documents and avoids for
-FIM (its custom watcher vs. Wazuh's syscheck) — so Sysmon gets its own
-forwarder here rather than reusing the Wazuh path.
+Wazuh agent instead would create the same kind of duplicate-alerting problem
+this lab's own FIM watcher avoids against Wazuh's syscheck (see
+`endpoint-configs/windows/fim/README.md`) — so Sysmon gets its own forwarder
+here rather than reusing the Wazuh path.
 
 ## Firewall / port impact
 
