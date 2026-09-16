@@ -15,6 +15,7 @@
 </script>
 <link rel="stylesheet" href="soc-theme.css">
 <script src="status-strip.js"></script>
+<script src="detail-modal.js"></script>
 <style>
   body { background:var(--bg-base); font-family:var(--font-sans); color:var(--text-primary); margin:0; transition:background-color .15s ease, color .15s ease; }
   .theme-toggle {
@@ -157,6 +158,16 @@
         <div class="category-card-desc">Offensive/adversary-emulation toolset — Caldera, Responder, Strix AI pentest, GoPhish. Isolated lab network only.</div>
         <div class="category-card-count">4 tools</div>
       </a>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <span class="card-title">🕐 Recent Activity</span>
+        <a href="01_soc_overview.html" class="btn btn-ghost btn-sm">Full SOC Overview →</a>
+      </div>
+      <div id="recent-activity-feed" class="alert-feed">
+        <p style="font-size:12px;color:var(--text-muted);padding:var(--space-4)">Loading…</p>
+      </div>
     </div>
   </div>
 
@@ -343,87 +354,6 @@
     </div>
   </div>
 
-  <div class="section-title">Direct Tool Access</div>
-  <div class="tools-grid">
-    <a href="http://localhost:5601" target="_blank" class="tool-link">🔍 OpenSearch Dashboards <span class="tool-port">:5601</span></a>
-    <a href="https://localhost:8443" target="_blank" class="tool-link">📋 DFIR-IRIS <span class="tool-port">:8443</span></a>
-    <a href="http://localhost:8888" target="_blank" class="tool-link">⚔️ MITRE Caldera <span class="tool-port">:8888</span></a>
-    <a href="http://localhost:8889" target="_blank" class="tool-link">🦖 Velociraptor <span class="tool-port">:8889</span></a>
-    <a href="http://localhost:8080" target="_blank" class="tool-link">🕵️ MISP <span class="tool-port">:8080</span></a>
-    <a href="http://localhost:9101" target="_blank" class="tool-link">⚡ StackStorm <span class="tool-port">:9101</span></a>
-    <a href="http://localhost:8500/docs" target="_blank" class="tool-link">🤖 AI Agents API <span class="tool-port">:8500</span></a>
-    <a href="http://localhost:11434" target="_blank" class="tool-link">🧠 Ollama LLM <span class="tool-port">:11434</span></a>
-    <a href="http://localhost:9200" target="_blank" class="tool-link">📦 OpenSearch API <span class="tool-port">:9200</span></a>
-  </div>
-
-  <div class="section-title">Quick Start</div>
-  <div class="qs-grid">
-
-    <div class="qs-card">
-      <h4>1 · Setup &amp; Deploy</h4>
-      <div class="log-block">git clone &lt;repo&gt; soc-lab &amp;&amp; cd soc-lab
-chmod +x setup.sh health-check.sh simulate-attack.sh
-sudo ./setup.sh</div>
-    </div>
-
-    <div class="qs-card">
-      <h4>2 · Run APT-29 Simulation</h4>
-      <div class="log-block">./simulate-attack.sh apt29
-# Injects 13 MITRE ATT&CK events
-# into OpenSearch soc-logs-* index
-
-./simulate-attack.sh verify
-# Confirms events were indexed</div>
-    </div>
-
-    <div class="qs-card">
-      <h4>3 · Optional — Red Team Profile</h4>
-      <div class="log-block">docker compose --profile redteam up -d
-# Starts Responder on lab VLAN
-# LLMNR/NBT-NS poisoning active
-# Lab network only!</div>
-    </div>
-
-    <div class="qs-card">
-      <h4>4 · Optional — Platform Hardening Profile</h4>
-      <div class="log-block">docker compose --profile platform-hardening up -d
-# Starts Keycloak, Vault, TheHive+Cortex,
-# Loki+Promtail, n8n
-# Then: vault operator init (save unseal keys!)</div>
-    </div>
-
-    <div class="qs-card">
-      <h4>5 · Optional — Blue Team Extensions Profile</h4>
-      <div class="log-block">docker compose --profile blue-team-extensions up -d
-# Starts CyberChef, Arkime, NetBox,
-# Falco, CrowdSec, Pi-hole
-# Then: docker exec soc-arkime db.pl \
-#   http://opensearch-node1:9200 init
-# Sysmon/osquery: deploy per-endpoint, see
-# endpoint-configs/windows/{sysmon,osquery}/
-# Docker config audit: ./security-scan.sh --docker-bench
-# Web scan: ./security-scan.sh --nuclei
-# Slack alerts: set SLACK_WEBHOOK_URL in .env</div>
-    </div>
-
-    <div class="qs-card">
-      <h4>6 · Endpoint + Infra Hardening (no new containers)</h4>
-      <div class="log-block"># Wazuh SCA — already in shared-agent.conf
-# WDAC (audit mode, one host at a time):
-cd endpoint-configs/windows/wdac
-.\Deploy-WDAC.ps1
-
-# Ansible — orchestrates all 4 endpoint scripts:
-cd ansible
-ansible-playbook -i inventory.local.ini \
-  playbooks/deploy-endpoint-agents.yml \
-  -e vector_host=&lt;vector-ip&gt;
-
-# Harbor registry (own installer, see config/harbor/README.md)</div>
-    </div>
-
-  </div>
-
 </div>
 
 <pb></pb>
@@ -589,6 +519,7 @@ async function loadHeroKpis() {
 
     if (overview?.recent_alerts?.length) {
       renderTicker(overview.recent_alerts);
+      renderRecentActivity(overview.recent_alerts);
     }
   } catch (e) {
     // Leave "—" placeholders rather than fabricate anything.
@@ -604,6 +535,34 @@ function renderTicker(alerts) {
   });
   // Duplicated once so the CSS scroll animation (which translates by -50%) loops seamlessly.
   document.getElementById('ticker-inner').innerHTML = items.concat(items).join('');
+}
+
+function fmtAlertTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
+  } catch (e) { return ''; }
+}
+
+function renderRecentActivity(alerts) {
+  const box = document.getElementById('recent-activity-feed');
+  const top = alerts.slice(0, 6);
+  box.innerHTML = top.map((a, i) => `
+    <div class="alert-item" data-idx="${i}" style="cursor:pointer">
+      <div class="alert-dot ${a.severity}"></div>
+      <div class="alert-content">
+        <div class="alert-title">${a.title}</div>
+        <div class="alert-meta"><span>${a.meta || ''}</span></div>
+      </div>
+      <div class="alert-time">${fmtAlertTime(a.timestamp)}</div>
+    </div>`).join('');
+  box.querySelectorAll('.alert-item[data-idx]').forEach(el => {
+    el.addEventListener('click', () => {
+      const a = top[+el.dataset.idx];
+      openDetailModal(a.raw || a, `Alert — ${a.title}`);
+    });
+  });
 }
 
 loadHeroKpis();
