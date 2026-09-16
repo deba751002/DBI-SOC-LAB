@@ -94,6 +94,7 @@ def fetch_new_alerts(client: OpenSearch) -> list[dict]:
                     {"term": {"event_type.keyword": "alert"}},
                     {"term": {"log_type.keyword": "suricata"}},
                     {"term": {"log_type.keyword": "wazuh"}},
+                    {"term": {"log_type.keyword": "wazuh-remote"}},
                 ],
                 "minimum_should_match": 1,
             }
@@ -232,7 +233,12 @@ ZEEK_NOTICE_FILTER = ZEEK_FILTER + [{"exists": {"field": "note"}}]
 # those ports, not the constant mDNS (5353) chatter phones/smart-TVs make.
 ZEEK_LLMNR_FILTER  = ZEEK_DNS_FILTER + [{"terms": {"id.resp_p": [5355, 137]}}]
 
-WAZUH_FILTER = [{"term": {"log_type.keyword": "wazuh"}}]
+# Matches both the local standalone-wazuh manager's alerts (log_type
+# "wazuh") and alerts pulled from an externally-hosted Wazuh via
+# wazuh-remote-connector/poller.py (tagged "wazuh-remote") - the two profiles
+# are meant to be run one-at-a-time, but every dashboard should work
+# regardless of which one is actually active without needing a code change.
+WAZUH_FILTER = [{"terms": {"log_type.keyword": ["wazuh", "wazuh-remote"]}}]
 FIM_FILTER = [{"term": {"log_type.keyword": "file_integrity"}}]
 WAZUH_FIM_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "syscheck"}}]
 WAZUH_VULN_FILTER = WAZUH_FILTER + [{"term": {"rule.groups.keyword": "vulnerability-detector"}}]
