@@ -591,7 +591,15 @@ async def handle_overview_summary(request):
     Replaces what used to be entirely hardcoded sample data on that page."""
     client = get_os_client()
     day = {"range": {"@timestamp": {"gte": "now-24h"}}}
-    alerting_types = {"terms": {"log_type.keyword": ["wazuh", "wazuh-remote", "suricata"]}}
+    # Wazuh's log_type already means "an alert" (there's no non-alert Wazuh
+    # log shipped here), but Suricata's log_type covers every eve.json event
+    # type (flow, dns, tls, ...), not just IDS detections - restricting to
+    # SURICATA_FILTER (which also requires an "alert" field) is what keeps
+    # this an *alert* feed instead of a raw-traffic feed.
+    alerting_types = {"bool": {"should": [
+        {"bool": {"filter": WAZUH_FILTER}},
+        {"bool": {"filter": SURICATA_FILTER}},
+    ], "minimum_should_match": 1}}
 
     def count(filt):
         return client.count(index="soc-logs-*", body={"query": {"bool": {"filter": filt}}})["count"]
